@@ -53,6 +53,7 @@ Shader shaderMulLighting;
 //Shader para el terreno
 Shader shaderTerrain;
 
+
 std::shared_ptr<FirstPersonCamera> camera(new FirstPersonCamera());
 
 Sphere skyboxSphere(20, 20);
@@ -83,6 +84,9 @@ Model modelDartLegoRightLeg;
 Model modelLamp1;
 Model modelLampPost2;
 Model modelLamp2;
+Model modelLamp3;
+Model modelLampPost3;
+Box lightbox;
 // Model animate instance
 // Mayow
 Model mayowModelAnimate;
@@ -162,6 +166,10 @@ std::vector<float> lamp1Orientation = { -17.0, -82.67, 23.70 };
 std::vector<glm::vec3> lamp2Position = { glm::vec3(-36.52, 0, -23.24),
 										 glm::vec3(-52.73, 0, -3.90) };
 std::vector<float> lamp2Orientation = {21.37 + 90, -65.0 + 90};
+
+std::vector<glm::vec3> lamp3Position = { glm::vec3(10.58, 0, 20.91),
+										 glm::vec3(25.58, 0, 20.91)};
+std::vector<float> lamp3Orientation = { 21.37 + 90, -65.0 + 90 };
 
 double deltaTime;
 double currTime, lastTime;
@@ -298,6 +306,16 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	modelLamp2.setShader(&shaderMulLighting);
 	modelLampPost2.loadModel("../models/Street_Light/LampPost.obj");
 	modelLampPost2.setShader(&shaderMulLighting);
+
+	modelLamp3.loadModel("../models/BlackLampPost/black_lamp_01.obj");
+	modelLamp3.setShader(&shaderMulLighting);
+	modelLampPost3.loadModel("../models/BlackLampPost/black_lamp_spotII_01.obj");
+	modelLampPost3.setShader(&shaderMulLighting);
+	lightbox.init();
+	lightbox.setShader(&shaderMulLighting);
+
+	
+
 	//Mayow
 	mayowModelAnimate.loadModel("../models/mayow/personaje2.fbx");
 	mayowModelAnimate.setShader(&shaderMulLighting);
@@ -694,6 +712,9 @@ void destroy() {
 	modelLamboRightDor.destroy();
 	modelRock.destroy();
 	modelLamp1.destroy();
+	modelLamp2.destroy();
+	modelLamp3.destroy();
+	modelLampPost3.destroy();
 
 	// Custom objects animate
 	mayowModelAnimate.destroy();
@@ -953,8 +974,8 @@ void applicationLoop() {
 		/*******************************************
 		 * Propiedades PointLights
 		 *******************************************/
-		shaderMulLighting.setInt("pointLightCount", lamp1Position.size() + lamp2Position.size());
-		shaderTerrain.setInt("pointLightCount", lamp1Position.size() + lamp2Position.size());
+		shaderMulLighting.setInt("pointLightCount", lamp1Position.size() + lamp2Position.size() + lamp3Position.size()); //Se añade el desplazamiento para la nueva lampara
+		shaderTerrain.setInt("pointLightCount", lamp1Position.size() + lamp2Position.size() + lamp3Position.size() );
 		for (int i = 0; i < lamp1Position.size(); i++){
 			glm::mat4 matrixAdjustLamp = glm::mat4(1.0f);
 			matrixAdjustLamp = glm::translate(matrixAdjustLamp, lamp1Position[i]);
@@ -1002,6 +1023,34 @@ void applicationLoop() {
 			shaderTerrain.setFloat("pointLights[" + std::to_string(i + lamp1Position.size()) + "].linear", 0.09);
 			shaderTerrain.setFloat("pointLights[" + std::to_string(i + lamp1Position.size()) + "].quadratic", 0.02);
 
+		}
+
+		for (int i = 0; i < lamp3Position.size(); i++)
+		{
+			glm::mat4 matrixAdjustPosition = glm::mat4(1.0);
+			matrixAdjustPosition = glm::translate(matrixAdjustPosition, lamp3Position[i]);									 //Traslación.
+			matrixAdjustPosition = glm::rotate(matrixAdjustPosition, glm::radians(lamp3Orientation[i]), glm::vec3(0, 1, 0)); //Rotación.
+			matrixAdjustPosition = glm::scale(matrixAdjustPosition, glm::vec3(1.0, 1.0, 1.0));								 //Escalado.
+			matrixAdjustPosition = glm::translate(matrixAdjustPosition, glm::vec3(0, 3.5, 0));							 //Traslación de luz a la posicion de la lampara
+			glm::vec3 lampPosition = glm::vec3(matrixAdjustPosition[3]);
+			shaderMulLighting.setVectorFloat3("pointLights[" + std::to_string(i + lamp1Position.size() + lamp2Position.size() ) + "].position", glm::value_ptr(lampPosition));
+			shaderMulLighting.setVectorFloat3("pointLights[" + std::to_string(i + lamp1Position.size() + lamp2Position.size() ) + "].light.ambient", glm::value_ptr(glm::vec3(0.2, 0.16, 0.01)));
+			shaderMulLighting.setVectorFloat3("pointLights[" + std::to_string(i + lamp1Position.size() + lamp2Position.size() ) + "].light.diffuse", glm::value_ptr(glm::vec3(0.4, 0.32, 0.02)));
+			shaderMulLighting.setVectorFloat3("pointLights[" + std::to_string(i + lamp1Position.size() + lamp2Position.size() ) + "].light.specular", glm::value_ptr(glm::vec3(0.6, 0.58, 0.03)));
+			shaderMulLighting.setFloat("pointLights[" + std::to_string(i 		+ lamp1Position.size() + lamp2Position.size() ) + "].constant", 1.0);
+			shaderMulLighting.setFloat("pointLights[" + std::to_string(i 		+ lamp1Position.size() + lamp2Position.size() ) + "].linear", 0.009);
+			shaderMulLighting.setFloat("pointLights[" + std::to_string(i 		+ lamp1Position.size() + lamp2Position.size() ) + "].quadratic", 0.002);
+			
+			// Es necesario hacer un doble corrimiento, es decir contar el desplazamiento de las posiciones de las lamparas 1 y 2
+			shaderTerrain.setVectorFloat3("pointLights[" + std::to_string(i 	+ lamp1Position.size() + lamp2Position.size() ) + "].position", glm::value_ptr(lampPosition));
+			shaderTerrain.setVectorFloat3("pointLights[" + std::to_string(i 	+ lamp1Position.size() + lamp2Position.size() ) + "].light.ambient", glm::value_ptr(glm::vec3(0.2, 0.16, 0.01)));
+			shaderTerrain.setVectorFloat3("pointLights[" + std::to_string(i 	+ lamp1Position.size() + lamp2Position.size() ) + "].light.diffuse", glm::value_ptr(glm::vec3(0.4, 0.32, 0.02)));
+			shaderTerrain.setVectorFloat3("pointLights[" + std::to_string(i 	+ lamp1Position.size() + lamp2Position.size() ) + "].light.specular", glm::value_ptr(glm::vec3(0.6, 0.58, 0.03)));
+			shaderTerrain.setFloat("pointLights[" + std::to_string(i 		    + lamp1Position.size() + lamp2Position.size() ) + "].constant", 1.0);
+			shaderTerrain.setFloat("pointLights[" + std::to_string(i 		    + lamp1Position.size() + lamp2Position.size() ) + "].linear", 0.009);
+			shaderTerrain.setFloat("pointLights[" + std::to_string(i 		    + lamp1Position.size() + lamp2Position.size() ) + "].quadratic", 0.002);
+			
+			//lightbox.render(matrixAdjustPosition);
 		}
 
 		//Se envian los spotlights
@@ -1117,7 +1166,7 @@ void applicationLoop() {
 
 		for (int i = 0; i < lamp2Position.size(); i++)
 		{
-			lamp2Position[i].y = terrain.getHeightTerrain(lamp1Position[i].x, lamp2Position[i].z);
+			lamp2Position[i].y = terrain.getHeightTerrain(lamp2Position[i].x, lamp2Position[i].z);
 			modelLamp2.setPosition(lamp2Position[i]);
 			modelLamp2.setScale(glm::vec3(1.0, 1.0, 1.0));
 			modelLamp2.setOrientation(glm::vec3(0, lamp2Orientation[i], 0));
@@ -1128,6 +1177,20 @@ void applicationLoop() {
 			modelLampPost2.setOrientation(glm::vec3(0, lamp2Orientation[i], 0));
 			modelLampPost2.render();
 
+		}
+
+		for (int i_err = 0; i_err < lamp3Position.size(); i_err++)
+		{
+			lamp3Position[i_err].y = terrain.getHeightTerrain(lamp3Position[i_err].x, lamp3Position[i_err].z);
+			modelLamp3.setPosition(lamp3Position[i_err]);
+			modelLamp3.setScale(glm::vec3(0.30, 0.30, 0.30));
+			modelLamp3.setOrientation(glm::vec3(0, lamp3Orientation[i_err], 0));
+			modelLamp3.render();
+			
+			modelLampPost3.setPosition(lamp3Position[i_err]);
+			modelLampPost3.setScale(glm::vec3(0.30, 0.30, 0.30));
+			modelLampPost3.setOrientation(glm::vec3(0, lamp3Orientation[i_err], 0));
+			modelLampPost3.render();
 
 
 		}

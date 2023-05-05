@@ -36,16 +36,14 @@ struct  SpotLight{
 
 };
 
-const int MAX_POINT_LIGHTS = 30;
+const int MAX_POINT_LIGHTS = 20;
 const int MAX_SPOT_LIGHTS = 1;
 
 out vec4 color;
 
-in vec3 fragPos;
-in vec4 fragPosLightSpace;
+in vec3 fragPos;  
 in vec3 our_normal;
 in vec2 our_uv;
-in float visibility;
 
 uniform int pointLightCount;
 uniform int spotLightCount;
@@ -56,81 +54,29 @@ uniform SpotLight spotLights[MAX_SPOT_LIGHTS];
 
 uniform vec3 viewPos;  
 uniform sampler2D texture1;
-
-uniform sampler2D shadowMap;
-
-uniform vec3 fogColor;
-
-float calculateShadow(vec3 lightDir){
-	// Perform perspective division in the case orthographic projection is w is 1
-	vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-	// Perfomr transform to middle NDC [0, 1]
-	projCoords = projCoords * 0.5 + 0.5;
-	// get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
-	float closestDepth = texture(shadowMap, projCoords.xy).r;
-	// get depth of current fragment from light's perspective
-    float currentDepth = projCoords.z;
-
-    // This is the first version of the shadow mapping with shadow acne
-    // float shadow = currentDepth > closestDepth  ? 1.0 : 0.0;
-
-    // This is the second version of the shadow mapping with shadow bias to correct the shadow acne
-    // float bias = 0.005;
-	// float shadow = currentDepth - bias > closestDepth  ? 1.0 : 0.0;
-
-	// This is the third version of the shadow mapping with shadow bias to correct the shadow acne
-	// vec3 normal = normalize(our_normal);
-	// float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.001);  
-	// float shadow = currentDepth - bias > closestDepth  ? 1.0 : 0.0;
-
-	// This is the four version of the shadow mapping with shadow bias to correct the shadow acne
-	// vec3 normal = normalize(our_normal);
-	// float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.001);  
-	// float shadow = currentDepth - bias > closestDepth  ? 1.0 : 0.0;
-	// if(projCoords.z > 1.0)
-    //	shadow = 0.0;
-
-
-    // This is the final version of the shadow mapping with shadow bias to correct the shadow acne
-    vec3 normal = normalize(our_normal);
-	float bias = max(0.005 * (1.0 - dot(normal, lightDir)), 0.001);  
-	float shadow = 0.0;
-	vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
-	for(int x = -1; x <= 1; ++x)
-	{
-	    for(int y = -1; y <= 1; ++y)
-	    {
-	        float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r; 
-	        shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;        
-	    }    
-	}
-	shadow /= 9.0;
-	if(projCoords.z > 1.0)
-        shadow = 0.0;
-
-    return shadow;
-}
+uniform sampler2D texture2;
 
 vec3 calculateDirectionalLight(Light light, vec3 direction){
+	vec4 textureColor1 = texture(texture1, our_uv);
+	vec4 textureColor2 = texture(texture2, our_uv);
+	vec4 textureMix = mix(textureColor1, textureColor2, 0.5);
 	// Ambient
-    vec3 ambient  = light.ambient * vec3(texture(texture1, our_uv));
+    vec3 ambient  = light.ambient * vec3(textureMix);
   	
     // Diffuse 
     vec3 normal = normalize(our_normal);
     vec3 lightDir = normalize(-direction);
     float diff = max(dot(normal, lightDir), 0.0);
-    vec3 diffuse  = light.diffuse * (diff * vec3(texture(texture1, our_uv)));
+    vec3 diffuse  = light.diffuse * (diff * vec3(textureMix));
     
     // Specular
     float specularStrength = 0.5f;
     vec3 viewDir = normalize(viewPos - fragPos);
     vec3 reflectDir = reflect(-lightDir, normal);  
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-    vec3 specular = light.specular * (spec * vec3(texture(texture1, our_uv)));
-    
-    float shadow = calculateShadow(-lightDir);
+    vec3 specular = light.specular * (spec * vec3(textureMix));  
         
-    return (ambient + (1.0 - shadow) * (diffuse + specular));
+    return (ambient + diffuse + specular);
 }
 
 vec3 calculatePointLights(){
@@ -164,5 +110,4 @@ void main()
 	if(colorText.a < 0.1)
 		discard;
     color = vec4(calculateDirectionalLight(directionalLight.light, directionalLight.direction) + calculatePointLights() + calculateSpotLights(), colorText.a);
-    color = mix(vec4(fogColor, 1.0), color, visibility);
 }
