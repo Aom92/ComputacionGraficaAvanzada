@@ -1478,6 +1478,10 @@ void resetGame() {
 	diffTime = 0;
 
 	enemyCollection.clear();
+	for (size_t i = 0; i < enemyCollection.size(); i++)
+	{
+		addOrUpdateColliders(collidersOBB, "enemy" + std::to_string(i), enemyCollection[i]->GetOBB(), glm::mat4(0.0f));
+	}
 	TIEMPO_ENTRE_ZOMBIES = 10;
 
 }
