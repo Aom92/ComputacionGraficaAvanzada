@@ -116,6 +116,9 @@
     <ClInclude Include="include\Headers\FontTypeRendering.h">
       <Filter>Archivos de encabezado</Filter>
     </ClInclude>
+    <ClInclude Include="include\Headers\GameObject.h">
+      <Filter>Archivos de encabezado</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\Shaders\colorShader.fs">
@@ -206,6 +209,18 @@
       <Filter>Archivos de recursos</Filter>
     </None>
     <None Include="..\Shaders\texturizado_depth_view.fs">
+      <Filter>Archivos de recursos</Filter>
+    </None>
+    <None Include="..\Shaders\particlesSmoke.fs">
+      <Filter>Archivos de recursos</Filter>
+    </None>
+    <None Include="..\Shaders\particlesSmoke.vert">
+      <Filter>Archivos de recursos</Filter>
+    </None>
+    <None Include="..\Shaders\particlesLluvia.fs">
+      <Filter>Archivos de recursos</Filter>
+    </None>
+    <None Include="..\Shaders\particlesLluvia.vert">
       <Filter>Archivos de recursos</Filter>
     </None>
   </ItemGroup>
