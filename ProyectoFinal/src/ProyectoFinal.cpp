@@ -59,6 +59,7 @@
 #define ARRAY_SIZE_IN_ELEMENTS(a) (sizeof(a)/sizeof(a[0]))
 
 // Constantes de juego.
+#define VELOCIDAD_BALA 1.2f
 #define VELOCIDAD_MOVIMIENTO_PERSONAJE 0.1f
 #define VELOCIDAD_ROTACION_PERSONAJE 0.6f
 #define VELOCIDAD_MOVIMIENTO_ZOMBIE 0.005f
@@ -132,8 +133,11 @@ Model modelDisparo;
 GameObject* mayowGameObject;
 GameObject* jugadorGameObject;
 GameObject* zombieGameObject;
+GameObject* bulletGameObject;
 
 std::vector<GameObject*> enemyCollection;
+std::vector<GameObject*> bulletCollection;
+
 
 // menus
 bool sw = false;
@@ -303,6 +307,7 @@ void checkCollisionsZombie();
 void checkCollisionsDisparo();
 
 void generarZombie();
+void generarBala();
 void resetGame();
 
 void drawGUIElement(GLuint textureID, glm::vec3 scale, glm::vec3 pos);
@@ -429,6 +434,9 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 
 	// Modelo de juego: Zombie.
 	zombieGameObject = new GameObject("Zombie", "../models/Zombie/ZombieAnimated.fbx", &shaderMulLighting);
+
+	// Modelo de juego: Bala.
+	bulletGameObject = new GameObject("Bala", &shader);
 
 	// Contenedor de Zombies.
 	for (int i = 0; i < 3; i++) {
@@ -829,22 +837,13 @@ bool processInput(bool continueApplication) {
 		animationIndex = 0;
 		animationIndexPlayer = 2;
 	}
-	else if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS) {
-		if (!lanzarBala[0]) lanzarBala[0] = true;
-		else if (!lanzarBala[1]) lanzarBala[1] = true;
-		else if (!lanzarBala[2]) lanzarBala[2] = true;
+	else if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS && glfwGetKey(window, GLFW_KEY_B) == GLFW_RELEASE  ) {
+
+
+		generarBala();
+
 	}
 
-	for (int i = 0; i < 3; i++) {
-		if (lanzarBala[i] && !isBalaColZombie[i] && disBala[i] <= disMaxBala) {
-			disBala[i] += velBala;
-		}
-		else if (lanzarBala[i] && (isBalaColZombie[i] || disBala[i] > disMaxBala)) {
-			lanzarBala[i] = false;
-			isBalaColZombie[i] = false;
-			disBala[i] = 0.0f;
-		}
-	}
 
 	bool stateSpace = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
 	if (!isJump && stateSpace)
@@ -1153,6 +1152,14 @@ void applicationLoop() {
 				addOrUpdateColliders(collidersOBB, "enemy" + std::to_string(i), enemyCollection[i]->GetOBB(), enemyCollection[i]->ModelMatrix);
 			}
 
+			for (size_t i = 0; i < bulletCollection.size(); i++)
+			{
+
+				bulletCollection[i]->UpdateColliderOBB(0.0f, glm::vec3(1, 0, 0), glm::vec3(0.05, 0.05, 0.05), glm::vec3(1.0));
+				addOrUpdateColliders(collidersOBB, "bullet" + std::to_string(i), bulletCollection[i]->GetOBB(), bulletCollection[i]->ModelMatrix);
+
+			}
+
 
 			// Lamps1 colliders
 			for (int i = 0; i < lamp1Position.size(); i++) {
@@ -1260,6 +1267,19 @@ void applicationLoop() {
 							std::cout << "JUGADOR HERIDO!: " << vidas << std::endl;
 						}
 
+						if (it->first.find("enemy") == 0 && jt->first.find("bullet") == 0) {
+							
+							if (bulletCollection.size() > 0) {
+
+								std::string strindex = jt->first.substr(6, 3);
+								int index = std::stoi(strindex);
+								if (index >= 0 && index < bulletCollection.size() )
+									bulletCollection.erase(bulletCollection.begin() + index );
+							
+							}
+
+						}
+
 
 					}
 				}
@@ -1322,6 +1342,12 @@ void applicationLoop() {
 						if (itCollision->first.find("enemy") == 0) {
 							
 						}
+
+						if (itCollision->first.find("bullet") == 0) {
+
+							
+						}
+
 					}
 				}
 
@@ -1383,59 +1409,7 @@ void applicationLoop() {
 			}
 
 
-			// LOGICA DE LA BALA.
-
-			float maxDistanceRayBala = 0.25;
-
-			for (int i = 0; i < 3; i++) {
-
-				if (i == 0) numVarBala = 0;
-				else if (i == 1) numVarBala = 3;
-				else if (i == 2) numVarBala = 6;
-
-				if (lanzarBala[i]) {
-					vectorMatrixRayBala[i] = glm::mat4(jugadorGameObject->ModelMatrix);
-					vectorMatrixRayBala[i] = glm::translate(vectorMatrixRayBala[i], glm::vec3(0, 1.8, disBala[i]));
-					vectorVarRayBala[numVarBala] = vectorMatrixRayBala[i][2];	// rayDirectionBala
-					vectorVarRayBala[numVarBala + 1] = vectorMatrixRayBala[i][3]; // origenBala -> Punto inicial
-					glm::vec3 midBala = vectorVarRayBala[numVarBala + 1] + vectorVarRayBala[numVarBala] * (maxDistanceRayBala / 2.0f); //Partiendo de la ecuacion canonica de la recta.
-					vectorVarRayBala[numVarBala + 2] = vectorVarRayBala[numVarBala + 1] + vectorVarRayBala[numVarBala] * maxDistanceRayBala;
-
-					vectorMatrixRayBala[i][3] = glm::vec4(midBala, 1.0);
-					vectorMatrixRayBala[i] = glm::rotate(vectorMatrixRayBala[i], glm::radians(90.0f), glm::vec3(1, 0, 0));
-					vectorMatrixRayBala[i] = glm::scale(vectorMatrixRayBala[i], glm::vec3(0.05f, maxDistanceRayBala, 0.05f));
-					bala.render(vectorMatrixRayBala[i]);
-
-					//// Colisi�n de bala con esfera
-					//std::map<std::string, std::tuple<AbstractModel::SBB, glm::mat4, glm::mat4> >::iterator itSBB;
-					//for (itSBB = collidersSBB.begin(); itSBB != collidersSBB.end(); itSBB++)
-					//{
-					//	float tRintBala;
-					//	if (raySphereIntersect(vectorVarRayBala[numVarBala + 1], vectorVarRayBala[numVarBala + 2], vectorVarRayBala[numVarBala], std::get<0>(itSBB->second), tRintBala)) {
-					//		std::cout << "Colision de la BALA con el modelo" << itSBB->first << std::endl;
-					//	}
-
-					//}
-
-					// Colisi�n de bala con caja
-					std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4> >::iterator itOBB;
-					for (itOBB = collidersOBB.begin(); itOBB != collidersOBB.end(); itOBB++)
-					{
-						if (testRayOBB(vectorVarRayBala[numVarBala + 1], vectorVarRayBala[numVarBala + 2], std::get<0>(itOBB->second))) {
-							//std::cout << "Colision de la BALA con el modelo " << itOBB->first.substr(0, 5) << std::endl;
-							if (itOBB->first.substr(0, 5) == "enemy") {
-								isBalaColZombie[i] = true;
-								std::cout << "+Colision de la BALA con el modelo " << itOBB->first.substr(5, 1) << std::endl;
-								//if (itOBB->first.substr(5, 1) == "0") numBalaImpacto = 0;
-								numEnemyImpacto = stoi(itOBB->first.substr(5, 1));
-								escalaEnemy[numEnemyImpacto] = 0.0f;
-								transladaEnemy[numEnemyImpacto] = -100.0f;
-							}
-						}
-
-					}
-				}
-			}
+			
 
 
 
@@ -1474,8 +1448,9 @@ void applicationLoop() {
 				}
 			}
 			
+#if _DEBUG_FLAG
 			std::cout << "tiempo entre zombies: " << TIEMPO_ENTRE_ZOMBIES << std::endl;
-
+#endif
 			std::string cadenaTiempo = buff;
 
 			modelText->render((cadenaTiempo), -0.15, 0.8, 1.0, 0.0, 0.0, 42);
@@ -1611,6 +1586,24 @@ void generarZombie() {
 			enemyCollection.push_back(temp);
 		}
 	}
+}
+
+void generarBala() {
+	float maxDistanceRayBala = 0.25;
+	bulletGameObject->ModelMatrix = glm::mat4(jugadorGameObject->ModelMatrix);
+	bulletGameObject->ModelMatrix = glm::translate(bulletGameObject->ModelMatrix, glm::vec3(0, 1.8, 0.5));
+	glm::vec3 dirBala = bulletGameObject->ModelMatrix[2];
+	glm::vec3 origenBala = bulletGameObject->ModelMatrix[3];
+	glm::vec3 midBala = origenBala + (dirBala * maxDistanceRayBala / 2.0f); //Partiendo de la ecuación canonica de la recta.
+
+	bulletGameObject->ModelMatrix[3] = glm::vec4(midBala, 1.0);
+	bulletGameObject->ModelMatrix = glm::rotate(bulletGameObject->ModelMatrix, glm::radians(90.0f), glm::vec3(1, 0, 0));
+	bulletGameObject->ModelMatrix = glm::scale(bulletGameObject->ModelMatrix, glm::vec3(0.05f, maxDistanceRayBala, 0.05f));
+
+	GameObject* temp = new GameObject();
+	memcpy(temp, bulletGameObject, sizeof(GameObject));
+
+	bulletCollection.push_back(temp);
 }
 
 void prepareScene() {
@@ -1863,7 +1856,22 @@ void renderScene(bool renderParticles) {
 		enemyCollection[i]->Draw();
 	}
 
+	// LOGICA DE LA BALA.
+	float maxDistanceRayBala = 0.25;
 
+	if(!bulletCollection.empty() )
+		for (size_t i = 0; i < bulletCollection.size(); i++)
+		{
+			glm::vec3 currDirection = glm::normalize(bulletCollection[i]->ModelMatrix[2]);
+			bulletCollection[i]->ModelMatrix = glm::translate(bulletCollection[i]->ModelMatrix, -currDirection * VELOCIDAD_BALA);
+
+
+			bulletCollection[i]->DrawCyl(bulletCollection[i]->ModelMatrix);
+
+		}
+
+
+	
 
 	
 

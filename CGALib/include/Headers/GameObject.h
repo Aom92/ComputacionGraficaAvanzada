@@ -2,6 +2,9 @@
 #include "Headers/Shader.h"
 #include <GL/glew.h>
 #include <string>
+#pragma once
+
+Cylinder cylConst(10,10, 1.0f, 1.0f, 1.0f);
 
 class GameObject
 {
@@ -13,12 +16,16 @@ public:
 	std::string nametag;
 	int animationIndex = 0;
 
+	Cylinder cyl = cylConst;
+
 	//Public
 	GameObject(std::string tag,std::string pathToModel, Shader* shader);
+	GameObject(std::string tag, Shader* shader);
 	GameObject();
 	~GameObject();
 
 	void Draw();
+	void DrawCyl(glm::mat4 modelMatrix);
 	void Draw(Model* modelReference);
 	//void DrawCollider();
 	void Translate(glm::vec3 translation);
@@ -72,6 +79,15 @@ GameObject::GameObject() {
 	
 }
 
+GameObject::GameObject(std::string tag, Shader* shader) {
+	this->ModelMatrix = glm::mat4(1.0f);
+	this->Transform = glm::mat4(1.0f);
+	this->ColliderTransform = glm::mat4(1.0f);
+	this->nametag = tag;
+	this->cyl.init();
+	this->cyl.setShader(shader);
+	this->cyl.setColor(glm::vec4(1.0, 0.0, 0.3765, 1.0));
+}
 
 GameObject::~GameObject()
 {
@@ -87,6 +103,10 @@ void GameObject::Draw()
 {
 	this->model.setAnimationIndex(animationIndex);
 	this->model.render(this->Transform);
+}
+
+void GameObject::DrawCyl(glm::mat4 parentTransformMatrix) {
+	this->cyl.render(parentTransformMatrix);
 }
 
 void GameObject::Draw(Model* modelReference)
