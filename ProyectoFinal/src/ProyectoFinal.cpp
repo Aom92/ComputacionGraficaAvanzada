@@ -71,6 +71,9 @@ int vidas = 1000;
 // Constantes para la camara
 #define SCREEN_WIDTH 1350
 #define SCREEN_HEIGHT 768
+#define CAMERA_PITCH 35.0f
+#define CAMERA_ANGLE 45.0f
+#define CAMERA_DISTANCE 15.0f
 
 // Constantes para las sombras.
 const unsigned int SHADOW_WIDTH = 4096, SHADOW_HEIGHT = 4096;
@@ -141,6 +144,9 @@ std::vector<GameObject*> bulletCollection;
 
 // menus
 bool sw = false;
+bool btnApress = false;
+bool btnBackPress = false;
+bool btnStartPress = false;
 
 //std::vector<GameObject> zombieGameObjects;
 std::vector<Box> zombieContainer;
@@ -445,7 +451,7 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 
 	// Camera
 	camera->setPosition(glm::vec3(0.0, 0.0, 10.0));
-	camera->setDistanceFromTarget(distanceFromTarget);
+	
 	camera->setSensitivity(1.0);
 
 	// Carga de texturas para el skybox
@@ -745,10 +751,14 @@ bool processInput(bool continueApplication) {
 		return false;
 	}
 
+
+	// Controles con Joystick
 	if (glfwJoystickPresent(GLFW_JOYSTICK_1) == GLFW_TRUE) {
-		std::cout << "Esta conectado el JoyStick!" << std::endl;
+		
 		int axisCount = 0, buttonCount = 0;
 		const float* axes = glfwGetJoystickAxes(GLFW_JOYSTICK_1, &axisCount);
+		const unsigned char* buttons = glfwGetJoystickButtons(GLFW_JOYSTICK_1, &buttonCount);
+#if _DEBUG_FLAG
 		std::cout << "Existen:  " << axisCount << " ejes detectados. " << std::endl;
 		std::cout << "Stick izquierdo horizontal " << axes[0] << std::endl;
 		std::cout << "Stick izquierdo vertical  " << axes[1] << std::endl;
@@ -759,34 +769,110 @@ bool processInput(bool continueApplication) {
 		std::cout << "Trigger L " << axes[4] << std::endl;
 		std::cout << "Trigger R " << axes[5] << std::endl;
 
-
 		const unsigned char* buttons = glfwGetJoystickButtons(GLFW_JOYSTICK_1, &buttonCount);
 		std::cout << "Existen:  " << buttonCount << " botones detectados. " << std::endl;
+#endif
+		
+		
+		
 
-
-		//Rotar al personaje
-		if (abs(axes[0]) >= 0.3f) {
-			//modelMatrixMayow = glm::rotate(modelMatrixMayow, axes[0] * -0.01f, glm::vec3(0.0f, 1.0f, 0.0f));
-			
-			mayowGameObject->Rotate(axes[0] * -0.01f, glm::vec3(0.0f, 1.0f, 0.0f));
-
+		//Mover al personaje Stick izquierdo
+		if (abs(axes[0]) >= 0.3 || abs(axes[1] >= 0.3) ) {
+			jugadorGameObject->ModelMatrix[3][0] += axes[0] * VELOCIDAD_MOVIMIENTO_PERSONAJE;
+			jugadorGameObject->ModelMatrix[3][2] += axes[1] * VELOCIDAD_MOVIMIENTO_PERSONAJE;
+			animationIndexPlayer = 2;
 		}
 
-		//Mover al personaje
-		if (abs(axes[1]) >= 0.3f) {
-			//modelMatrixMayow = glm::translate(modelMatrixMayow,);
+		//Rotar al personaje Stick Derecho
+		if (abs(axes[2]) >= 0.3f   || abs(axes[3]) >= 0.3){
+			/*jugadorGameObject->ModelMatrix = glm::rotate(jugadorGameObject->ModelMatrix, glm::radians(axes[2] * VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
 			animationIndex = 0;
-			mayowGameObject->Translate(glm::vec3(0.0f, 0.0f, axes[1] * 0.02f));
+			animationIndexPlayer = 2;
+			
+
+			jugadorGameObject->ModelMatrix = glm::rotate(jugadorGameObject->ModelMatrix, glm::radians(axes[0] * VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));*/
+
+			float stickAngle = glm::degrees( atan(axes[3] / axes[2]));
+			glm::mat4 currentTransform = jugadorGameObject->ModelMatrix;
+			glm::vec3 playerDir = jugadorGameObject->ModelMatrix[2];
+
+			
+			std::cout << "angulo del stick = " << stickAngle << std::endl;
+			std::cout << " Dir X = " << playerDir.x << " Dir Y = " << playerDir.y << " Dir Z = " << playerDir.z << std::endl;
+
+			glm::vec3 newDir = glm::normalize(glm::vec3(axes[2], 0, axes[3]));
+			glm::clamp(newDir, 0.0f, 1.0f);
+			jugadorGameObject->ModelMatrix[2][0] = newDir.x;
+			jugadorGameObject->ModelMatrix[2][1] = 0;
+			jugadorGameObject->ModelMatrix[2][2] = newDir.z;
+
+			//jugadorGameObject->ModelMatrix = glm::rotate(currentTransform, glm::radians(stickAngle), glm::vec3(0, 1, 0));
+			
+
+			
+
+	//		jugadorGameObject->ModelMatrix[2][0] += axes[2] * VELOCIDAD_MOVIMIENTO_PERSONAJE;
+//			jugadorGameObject->ModelMatrix[2][1] += axes[3] * VELOCIDAD_MOVIMIENTO_PERSONAJE;
+
+			animationIndex = 0;
+			animationIndexPlayer = 2;
 		}
 
-		//Mover la camara
-		if (abs(axes[2]) >= 0.3f) {
-			camera->mouseMoveCamera(axes[2], 0.0f, deltaTime);
+		//Disparar balas, Boton A.
+		//Detect Press
+		if(buttons[0] == GLFW_PRESS) {
+			btnApress = true;
 		}
 
-		if (abs(axes[3]) >= 0.3f) {
-			camera->mouseMoveCamera(0.0f, axes[3], deltaTime);
+		//Wait for Release
+		if (btnApress && buttons[0] == GLFW_RELEASE) {
+			generarBala();
+			btnApress = false;
 		}
+		
+
+		//Menu pausa, Boton Back
+		
+		//Detect Press
+		if(buttons[6] == GLFW_PRESS){
+			btnBackPress = true;
+		}
+
+		//Wait for Release
+		if (btnBackPress && buttons[6] == GLFW_RELEASE )
+		{
+			sw = !sw;
+			if (sw) {
+				state = PAUSE;
+
+			}
+			else {
+				state = PLAY;
+			}
+			btnBackPress = false;
+		}
+
+		// Menu Inicio y reiniciar, Boton Back.
+		if (state == TITLE) {
+			if (buttons[7] == GLFW_PRESS) {
+				btnStartPress = true;
+			}
+			if (btnStartPress && buttons[7] == GLFW_RELEASE) {
+				state = PLAY;
+				isPaused = false;
+			}
+
+		}
+
+		if (state == GAMEOVER) {
+			if (buttons[6] == GLFW_PRESS )
+			{
+				state = PLAY;
+				resetGame();
+
+			}
+		}
+		
 
 
 	}
@@ -797,46 +883,34 @@ bool processInput(bool continueApplication) {
 	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
 		camera->mouseMoveCamera(offsetX, 0.0, deltaTime);
 	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
-		camera->mouseMoveCamera(0.0, offsetY, deltaTime);
+		camera->mouseMoveCamera(0.0, offsetY, deltaTime);	
 	offsetX = 0;
 	offsetY = 0;
 
-
+	//Rotación del jugador
 	if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
-		//modelMatrixMayow = glm::rotate(modelMatrixMayow, glm::radians(VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
-		//mayowGameObject->Rotate(VELOCIDAD_ROTACION_PERSONAJE, glm::vec3(0, 1, 0));
-		//mayowGameObject->ModelMatrix = glm::rotate(mayowGameObject->ModelMatrix, glm::radians(VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
-
 		jugadorGameObject->ModelMatrix = glm::rotate(jugadorGameObject->ModelMatrix, glm::radians(VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
-
 		animationIndex = 0;
 		animationIndexPlayer = 2;
 	}
 	else if ( glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
-		//modelMatrixMayow = glm::rotate(modelMatrixMayow, glm::radians(-VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
-		//mayowGameObject->Rotate(-VELOCIDAD_ROTACION_PERSONAJE, glm::vec3(0, 1, 0));
-		//mayowGameObject->ModelMatrix = glm::rotate(mayowGameObject->ModelMatrix, glm::radians(-VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
-		
-		jugadorGameObject->ModelMatrix = glm::rotate(jugadorGameObject->ModelMatrix, glm::radians(-VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
-		
+	
+		jugadorGameObject->ModelMatrix = glm::rotate(jugadorGameObject->ModelMatrix, glm::radians(-VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));	
 		animationIndex = 0;
 		animationIndexPlayer = 2;
+
+	//Movimiento del jugador
 	}if ( glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
-		//modelMatrixMayow = glm::translate(modelMatrixMayow, glm::vec3(0, 0, VELOCIDAD_MOVIMIENTO_PERSONAJE));
-		//mayowGameObject->Translate(glm::vec3(0, 0, VELOCIDAD_MOVIMIENTO_PERSONAJE));
-		//mayowGameObject->ModelMatrix = glm::translate(mayowGameObject->ModelMatrix, glm::vec3(0, 0, VELOCIDAD_MOVIMIENTO_PERSONAJE));
 		jugadorGameObject->ModelMatrix = glm::translate(jugadorGameObject->ModelMatrix, glm::vec3(0, 0, VELOCIDAD_MOVIMIENTO_PERSONAJE));
 		animationIndex = 0;
 		animationIndexPlayer = 2;
 	}
 	else if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-		//modelMatrixMayow = glm::translate(modelMatrixMayow, glm::vec3(0, 0, -VELOCIDAD_MOVIMIENTO_PERSONAJE));
-		//mayowGameObject->Translate(glm::vec3(0, 0, -VELOCIDAD_MOVIMIENTO_PERSONAJE));
-		//mayowGameObject->ModelMatrix = glm::translate(mayowGameObject->ModelMatrix, glm::vec3(0, 0, -VELOCIDAD_MOVIMIENTO_PERSONAJE));
 		jugadorGameObject->ModelMatrix = glm::translate(jugadorGameObject->ModelMatrix, glm::vec3(0, 0, -VELOCIDAD_MOVIMIENTO_PERSONAJE));
 		animationIndex = 0;
 		animationIndexPlayer = 2;
 	}
+	// Disparar bala
 	else if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS && glfwGetKey(window, GLFW_KEY_B) == GLFW_RELEASE  ) {
 
 
@@ -918,7 +992,10 @@ void applicationLoop() {
 
 	lastTime = TimeManager::Instance().GetTime();
 
-	
+	//Setting up Initial camera Angle and position.
+	camera->setAngleTarget(CAMERA_ANGLE);
+	camera->setDistanceFromTarget(CAMERA_DISTANCE);
+	camera->mouseMoveCamera(0.0, 45.0, 0.009);
 
 	glm::vec3 lightPos = glm::vec3(10.0, 10.0, 0.0);
 	shadowBox = new ShadowBox(-lightPos, camera.get(), 30.0f, 0.1f, 45.0f);
@@ -930,7 +1007,7 @@ void applicationLoop() {
 		
 
 		currTime = TimeManager::Instance().GetTime();
-		if (currTime - lastTime < 0.00833333334) {
+		if (currTime - lastTime < 0.0166667) {
 			glfwPollEvents();
 			continue;
 		}
@@ -965,7 +1042,7 @@ void applicationLoop() {
 				angleTarget = -angleTarget;
 
 			camera->setCameraTarget(target);
-			camera->setAngleTarget(angleTarget);
+			//camera->mouseMoveCamera(0.0, 15.0, deltaTime);
 			camera->updateCamera();
 			view = camera->getViewMatrix();
 
@@ -1259,23 +1336,36 @@ void applicationLoop() {
 					if (it != jt && testOBBOBB(
 						std::get<0>(it->second), std::get<0>(jt->second))) {
 
+						//TODO: add debug flags
+
 						std::cout << "Hay colision entre: " << it->first << " y el modelo: " << jt->first << std::endl;
 						isCollision = true;
-						
+
+						//Colision enemygo con jugador hiere al jugador.
 						if (it->first.compare("jugador") == 0 && jt->first.find("enemy") == 0) {
 							vidas -= 1;
+#if _DEBUG_FLAG
 							std::cout << "JUGADOR HERIDO!: " << vidas << std::endl;
+#endif
 						}
 
 						if (it->first.find("enemy") == 0 && jt->first.find("bullet") == 0) {
 							
 							if (bulletCollection.size() > 0) {
 
+								//Obtenemos el indice de la bala por medio del indentificador generado por el collider.
 								std::string strindex = jt->first.substr(6, 3);
 								int index = std::stoi(strindex);
-								if (index >= 0 && index < bulletCollection.size() )
-									bulletCollection.erase(bulletCollection.begin() + index );
-							
+
+								//Validar que el indice este dentro del rango de las balas. pues esta sección se ejecuta por cada frame que hubo colisión.
+								if (index >= 0 && index < bulletCollection.size()) {
+									//Trasladamos a una ubicación lejana para no marcar mas colisiones antes de ser borrado.
+									bulletCollection[index]->ModelMatrix = glm::translate(bulletCollection[index]->ModelMatrix, glm::vec3(0.0f, -100.0f, 0.0f));
+									addOrUpdateColliders(collidersOBB, "bullet" + std::to_string(index), bulletCollection[index]->GetOBB(), bulletCollection[index]->ModelMatrix);
+									bulletCollection.erase(bulletCollection.begin() + index);
+
+								}
+									
 							}
 
 						}
