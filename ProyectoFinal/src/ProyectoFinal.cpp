@@ -1,5 +1,6 @@
 #define _USE_MATH_DEFINES
 #define _DEBUG_FLAG 0
+#define _DEBUG_CAMERA 0
 #include <cmath>
 //glew include
 #include <GL/glew.h>
@@ -62,15 +63,20 @@
 #define VELOCIDAD_BALA 1.2f
 #define VELOCIDAD_MOVIMIENTO_PERSONAJE 0.1f
 #define VELOCIDAD_ROTACION_PERSONAJE 0.6f
-#define VELOCIDAD_MOVIMIENTO_ZOMBIE 0.005f
+
 #define GRAVEDAD_SALTO_PERSONAJE 0.5f
-#define NUMERO_ENEMIGOS 3
+#define NUMERO_ENEMIGOS 30
+#define VELOCIDAD_DE_GIRO_PERSONAJE 5.0f
 int TIEMPO_ENTRE_ZOMBIES = 10;
 int vidas = 1000;
+float VELOCIDAD_MOVIMIENTO_ZOMBIE = 0.001f;
 
 // Constantes para la camara
 #define SCREEN_WIDTH 1350
 #define SCREEN_HEIGHT 768
+#define CAMERA_PITCH 35.0f
+#define CAMERA_ANGLE 45.0f
+#define CAMERA_DISTANCE 15.0f
 
 // Constantes para las sombras.
 const unsigned int SHADOW_WIDTH = 4096, SHADOW_HEIGHT = 4096;
@@ -114,10 +120,6 @@ Model modelRock;
 Model modelHeliChasis;
 Model modelHeliHeli;
 
-// Lamparas - iluminaci�n.
-Model modelLamp1;
-Model modelLamp2;
-Model modelLampPost2;
 
 // Modelos animados: 
 // Pruebas:
@@ -146,6 +148,9 @@ std::vector<GameObject*> bulletCollection;
 
 // menus
 bool sw = false;
+bool btnApress = false;
+bool btnBackPress = false;
+bool btnStartPress = false;
 
 //std::vector<GameObject> zombieGameObjects;
 std::vector<Box> zombieContainer;
@@ -279,8 +284,8 @@ GLuint depthMap, depthMapFBO;
  **********************/
 
 // OpenAL Defines
-#define NUM_BUFFERS 1
-#define NUM_SOURCES 1
+#define NUM_BUFFERS 3
+#define NUM_SOURCES 2
 #define NUM_ENVIRONMENTS 1
 // Listener
 ALfloat listenerPos[] = { 0.0, 0.0, 4.0 };
@@ -290,8 +295,8 @@ ALfloat listenerOri[] = { 0.0, 0.0, 1.0, 0.0, 1.0, 0.0 };
 ALfloat BGMusic0Pos[] = { -2.0, 0.0, 0.0 };
 ALfloat BGMusic0Vel[] = { 0.0, 0.0, 0.0 };
 // Source 1
-ALfloat FootStepPos[] = { 2.0, 0.0, 0.0 };
-ALfloat FootStepVel[] = { 0.0, 0.0, 0.0 };
+ALfloat GunPos[] = { 2.0, 0.0, 0.0 };
+ALfloat GunVel[] = { 0.0, 0.0, 0.0 };
 
 // Buffers
 ALuint buffer[NUM_BUFFERS];
@@ -303,7 +308,7 @@ ALenum format;
 ALvoid *data;
 int ch;
 ALboolean loop;
-std::vector<bool> sourcesPlay = { true, true };
+std::vector<bool> sourcesPlay = { true, false };
 
 // *-------------------------------------------------*
 // *--------   PROTOTIPOS DE FUNCIONES        -------*
@@ -449,16 +454,7 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	
 	terrain.setPosition(glm::vec3(100, 0, 100));
 
-	//Lamp models
-	modelLamp1.loadModel("../models/Street-Lamp-Black/objLamp.obj");
-	modelLamp1.setShader(&shaderMulLighting);
-	modelLamp2.loadModel("../models/Street_Light/Lamp.obj");
-	modelLamp2.setShader(&shaderMulLighting);
-	modelLampPost2.loadModel("../models/Street_Light/LampPost.obj");
-	modelLampPost2.setShader(&shaderMulLighting);
 
-	// ESTO SE VA A SUSTITUIR
-	//modelZombieBlood.loadModel("");
 	
 	// Modelo de pruebas: Mayow
 
@@ -471,7 +467,7 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	zombieGameObject = new GameObject("Zombie", "../models/Zombie/ZombieAnimated.fbx", &shaderMulLighting);
 
 	// Modelo de juego: Bala.
-	bulletGameObject = new GameObject("Bala", &shader);
+	bulletGameObject = new GameObject("Bala", "../models/bullet/bullet.fbx", &shaderMulLighting);
 
 	// Contenedor de Zombies.
 	for (int i = 0; i < 3; i++) {
@@ -480,7 +476,7 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 
 	// Camera
 	camera->setPosition(glm::vec3(0.0, 0.0, 10.0));
-	camera->setDistanceFromTarget(distanceFromTarget);
+	
 	camera->setSensitivity(1.0);
 
 	// Carga de texturas para el skybox
@@ -612,6 +608,7 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	// Generate buffers, or else no sound will happen!
 	alGenBuffers(NUM_BUFFERS, buffer);
 	buffer[0] = alutCreateBufferFromFile("../sounds/bg01.wav");
+	buffer[1] = alutCreateBufferFromFile("../sounds/gunshot.wav");
 	//buffer[1] = alutCreateBufferFromFile("../sounds/walk.wav");
 	int errorAlut = alutGetError();
 	if (errorAlut != ALUT_ERROR_NO_ERROR) {
@@ -634,6 +631,14 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	alSourcei(source[0], AL_BUFFER, buffer[0]);
 	alSourcei(source[0], AL_LOOPING, AL_TRUE);
 	alSourcef(source[0], AL_MAX_DISTANCE, 2000);
+
+	alSourcef( source[1], AL_PITCH, 1.0f);
+	alSourcef( source[1], AL_GAIN, 3.0f);
+	alSourcefv(source[1], AL_POSITION, GunPos);
+	alSourcefv(source[1], AL_VELOCITY, GunVel);
+	alSourcei( source[1], AL_BUFFER, buffer[1]);
+	alSourcei( source[1], AL_LOOPING, AL_FALSE);
+	alSourcef( source[1], AL_MAX_DISTANCE, 2000);
 
 	startupTimer = TimeManager::Instance().GetTime();
 
@@ -710,9 +715,7 @@ void destroy() {
 	modelHeliChasis.destroy();
 	modelHeliHeli.destroy();
 	modelRock.destroy();
-	modelLamp1.destroy();
-	modelLamp2.destroy();
-	modelLampPost2.destroy();
+
 
 	// Custom objects animate
 	/*mayowModelAnimate.destroy();*/
@@ -808,10 +811,16 @@ bool processInput(bool continueApplication) {
 		return false;
 	}
 
+
+	// Controles con Joystick
 	if (glfwJoystickPresent(GLFW_JOYSTICK_1) == GLFW_TRUE) {
-		std::cout << "Esta conectado el JoyStick!" << std::endl;
+		
 		int axisCount = 0, buttonCount = 0;
 		const float* axes = glfwGetJoystickAxes(GLFW_JOYSTICK_1, &axisCount);
+		const unsigned char* buttons = glfwGetJoystickButtons(GLFW_JOYSTICK_1, &buttonCount);
+
+
+#if _DEBUG_FLAG
 		std::cout << "Existen:  " << axisCount << " ejes detectados. " << std::endl;
 		std::cout << "Stick izquierdo horizontal " << axes[0] << std::endl;
 		std::cout << "Stick izquierdo vertical  " << axes[1] << std::endl;
@@ -822,104 +831,148 @@ bool processInput(bool continueApplication) {
 		std::cout << "Trigger L " << axes[4] << std::endl;
 		std::cout << "Trigger R " << axes[5] << std::endl;
 
-
 		const unsigned char* buttons = glfwGetJoystickButtons(GLFW_JOYSTICK_1, &buttonCount);
 		std::cout << "Existen:  " << buttonCount << " botones detectados. " << std::endl;
+#endif
+		
+		//Mover al personaje Stick izquierdo
+		if (abs(axes[0]) >= 0.1 || abs(axes[1] >= 0.1) ) {
+			jugadorGameObject->ModelMatrix[3][0] += -axes[0] * VELOCIDAD_MOVIMIENTO_PERSONAJE;
+			jugadorGameObject->ModelMatrix[3][2] += axes[1] * VELOCIDAD_MOVIMIENTO_PERSONAJE;
+			animationIndexPlayer = 2;
+		}
 
+		//Rotar al personaje Stick Derecho
+		if (abs(axes[2]) >= 0.3f   || abs(axes[3]) >= 0.3){
+		
+			//Obtenemos la posición del jugador y del stick
+			glm::vec3 playerCenter = glm::vec3(jugadorGameObject->ModelMatrix[3][0], jugadorGameObject->ModelMatrix[3][1], jugadorGameObject->ModelMatrix[3][2]);
+			glm::vec3 stickPosRelToPlayer = glm::vec3(playerCenter.x + axes[2], playerCenter.y, playerCenter.z + axes[3]);  //This is target position relative to player
 
-		//Rotar al personaje
-		if (abs(axes[0]) >= 0.3f) {
-			//modelMatrixMayow = glm::rotate(modelMatrixMayow, axes[0] * -0.01f, glm::vec3(0.0f, 1.0f, 0.0f));
+			//Obtenemos la dirección hacia el stick
+			glm::vec3 directionToStick = glm::normalize(stickPosRelToPlayer - playerCenter);
+			glm::vec3 currentDir = glm::normalize(jugadorGameObject->ModelMatrix[2]);
+
+			glm::mat4 currentTransform = jugadorGameObject->ModelMatrix; //Save current transform
 			
-			mayowGameObject->Rotate(axes[0] * -0.01f, glm::vec3(0.0f, 1.0f, 0.0f));
+			//Obtenemos el angulo entre la dirección actual y la dirección hacia el stick
+			float dotProduct = glm::dot(currentDir, directionToStick);
+			glm::vec3 crossProduct = glm::cross(directionToStick, currentDir);
+			float stickAngle = (acos(dotProduct));
+
+			//directionToStick != currentDir
+			if (stickAngle > 3.0f || stickAngle < 2.9f)
+			{
+				if(crossProduct.y < 0)
+					jugadorGameObject->ModelMatrix = glm::rotate(currentTransform, glm::radians(-VELOCIDAD_DE_GIRO_PERSONAJE), glm::vec3(0, 1, 0));
+				if(crossProduct.y > 0)
+					jugadorGameObject->ModelMatrix = glm::rotate(currentTransform, glm::radians(VELOCIDAD_DE_GIRO_PERSONAJE), glm::vec3(0, 1, 0));
+			}
+		
+		}
+
+		//Disparar balas, Boton RB.
+		//Detect Press
+		if(buttons[5] == GLFW_PRESS) {
+			btnApress = true;
+		}
+
+		//Wait for Release
+		if (btnApress && buttons[5] == GLFW_RELEASE) {
+			generarBala();
+			alSourcePlay(source[1]);
+			btnApress = false;
+		}
+		
+
+		//Menu pausa, Boton Back
+		
+		//Detect Press
+		if(buttons[6] == GLFW_PRESS){
+			btnBackPress = true;
+		}
+
+		//Wait for Release
+		if (btnBackPress && buttons[6] == GLFW_RELEASE )
+		{
+			sw = !sw;
+			if (sw) {
+				state = PAUSE;
+
+			}
+			else {
+				state = PLAY;
+			}
+			btnBackPress = false;
+		}
+
+		// Menu Inicio y reiniciar, Boton Back.
+		if (state == TITLE) {
+			if (buttons[7] == GLFW_PRESS) {
+				btnStartPress = true;
+			}
+			if (btnStartPress && buttons[7] == GLFW_RELEASE) {
+				state = PLAY;
+				isPaused = false;
+			}
 
 		}
 
-		//Mover al personaje
-		if (abs(axes[1]) >= 0.3f) {
-			//modelMatrixMayow = glm::translate(modelMatrixMayow,);
-			animationIndex = 0;
-			mayowGameObject->Translate(glm::vec3(0.0f, 0.0f, axes[1] * 0.02f));
-		}
+		if (state == GAMEOVER) {
+			if (buttons[6] == GLFW_PRESS )
+			{
+				state = PLAY;
+				resetGame();
 
-		//Mover la camara
-		if (abs(axes[2]) >= 0.3f) {
-			camera->mouseMoveCamera(axes[2], 0.0f, deltaTime);
+			}
 		}
-
-		if (abs(axes[3]) >= 0.3f) {
-			camera->mouseMoveCamera(0.0f, axes[3], deltaTime);
-		}
+		
 
 
 	}
 
 
 
-
+#if _DEBUG_CAMERA
 	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
 		camera->mouseMoveCamera(offsetX, 0.0, deltaTime);
 	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
-		camera->mouseMoveCamera(0.0, offsetY, deltaTime);
+		camera->mouseMoveCamera(0.0, offsetY, deltaTime);	
 	offsetX = 0;
 	offsetY = 0;
-
-	JugadorCaminaBool = false;
+#endif
+	//Rotación del jugador
 	if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
-		//modelMatrixMayow = glm::rotate(modelMatrixMayow, glm::radians(VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
-		//mayowGameObject->Rotate(VELOCIDAD_ROTACION_PERSONAJE, glm::vec3(0, 1, 0));
-		//mayowGameObject->ModelMatrix = glm::rotate(mayowGameObject->ModelMatrix, glm::radians(VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
-
 		jugadorGameObject->ModelMatrix = glm::rotate(jugadorGameObject->ModelMatrix, glm::radians(VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
-
 		animationIndex = 0;
 		animationIndexPlayer = 2;
 		JugadorCaminaBool = true;
 	}
 	else if ( glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
-		//modelMatrixMayow = glm::rotate(modelMatrixMayow, glm::radians(-VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
-		//mayowGameObject->Rotate(-VELOCIDAD_ROTACION_PERSONAJE, glm::vec3(0, 1, 0));
-		//mayowGameObject->ModelMatrix = glm::rotate(mayowGameObject->ModelMatrix, glm::radians(-VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
-		
-		jugadorGameObject->ModelMatrix = glm::rotate(jugadorGameObject->ModelMatrix, glm::radians(-VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
-		
+	
+		jugadorGameObject->ModelMatrix = glm::rotate(jugadorGameObject->ModelMatrix, glm::radians(-VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));	
 		animationIndex = 0;
 		animationIndexPlayer = 2;
-		JugadorCaminaBool = true;
+
+	//Movimiento del jugador
 	}if ( glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
-		//modelMatrixMayow = glm::translate(modelMatrixMayow, glm::vec3(0, 0, VELOCIDAD_MOVIMIENTO_PERSONAJE));
-		//mayowGameObject->Translate(glm::vec3(0, 0, VELOCIDAD_MOVIMIENTO_PERSONAJE));
-		//mayowGameObject->ModelMatrix = glm::translate(mayowGameObject->ModelMatrix, glm::vec3(0, 0, VELOCIDAD_MOVIMIENTO_PERSONAJE));
 		jugadorGameObject->ModelMatrix = glm::translate(jugadorGameObject->ModelMatrix, glm::vec3(0, 0, VELOCIDAD_MOVIMIENTO_PERSONAJE));
 		animationIndex = 0;
 		animationIndexPlayer = 2;
 		JugadorCaminaBool = true;
 	}
 	else if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-		//modelMatrixMayow = glm::translate(modelMatrixMayow, glm::vec3(0, 0, -VELOCIDAD_MOVIMIENTO_PERSONAJE));
-		//mayowGameObject->Translate(glm::vec3(0, 0, -VELOCIDAD_MOVIMIENTO_PERSONAJE));
-		//mayowGameObject->ModelMatrix = glm::translate(mayowGameObject->ModelMatrix, glm::vec3(0, 0, -VELOCIDAD_MOVIMIENTO_PERSONAJE));
 		jugadorGameObject->ModelMatrix = glm::translate(jugadorGameObject->ModelMatrix, glm::vec3(0, 0, -VELOCIDAD_MOVIMIENTO_PERSONAJE));
 		animationIndex = 0;
 		animationIndexPlayer = 2;
 		JugadorCaminaBool = true;
 	}
+	// Disparar bala
 	else if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS && glfwGetKey(window, GLFW_KEY_B) == GLFW_RELEASE  ) {
 
 
 		generarBala();
 
-	}
-
-	if (JugadorCaminaBool)
-		blendingUnsorted.find("particulasCamina")->second = glm::vec3(jugadorGameObject->ModelMatrix[3]);
-
-	bool stateSpace = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
-	if (!isJump && stateSpace)
-	{
-		isJump = true;
-		startTimeJump = currTime;
-		tmv = 0;
 	}
 
 	bool statePause;
@@ -967,29 +1020,14 @@ void applicationLoop() {
 	//Initial Positions???
 	matrixModelRock = glm::translate(matrixModelRock, glm::vec3(-3.0, 0.0, 2.0));
 	jugadorGameObject->ModelMatrix = glm::translate(jugadorGameObject->ModelMatrix, glm::vec3(3.0, 0.0, 2.0));
-	mayowGameObject->ModelMatrix = glm::translate(mayowGameObject->ModelMatrix, glm::vec3(13.0f, 0.05f, -5.0f));
-	mayowGameObject->ModelMatrix = glm::rotate(mayowGameObject->ModelMatrix, glm::radians(-90.0f), glm::vec3(0, 1, 0));
 	zombieGameObject->ModelMatrix = glm::translate(zombieGameObject->ModelMatrix, glm::vec3(5.0, 0.0, 2.0));
 	
-	//blendingUnsorted.find("particulasCamina")->second = glm::vec3(jugadorGameObject->ModelMatrix[3]);
-
-	for (int i = 0; i < lamp1Position.size(); i++) {
-
-		GameObject* lamp = new GameObject("Light", "../models/Street-Lamp-Black/objLamp.obj", &shaderMulLighting);
-
-		Lamparas.push_back(lamp);
-	}
-
-	for (int i = 0; i < lamp2Position.size(); i++) {
-
-		GameObject* lamp = new GameObject("light2", "../models/Street_Light/Lamp.obj", &shaderMulLighting);
-		GameObject* post = new GameObject("Post2", "../models/Street_Light/LampPost.obj", &shaderMulLighting);
-		Lamparas2.push_back(lamp);
-	}
-
 	lastTime = TimeManager::Instance().GetTime();
 
-	
+	//Setting up Initial camera Angle and position.
+	camera->setAngleTarget(CAMERA_ANGLE);
+	camera->setDistanceFromTarget(CAMERA_DISTANCE);
+	camera->mouseMoveCamera(0.0, 45.0, 0.009);
 
 	glm::vec3 lightPos = glm::vec3(10.0, 10.0, 0.0);
 	shadowBox = new ShadowBox(-lightPos, camera.get(), 30.0f, 0.1f, 45.0f);
@@ -1001,7 +1039,7 @@ void applicationLoop() {
 		
 
 		currTime = TimeManager::Instance().GetTime();
-		if (currTime - lastTime < 0.00833333334) {
+		if (currTime - lastTime < 0.0166667) {
 			glfwPollEvents();
 			continue;
 		}
@@ -1036,7 +1074,7 @@ void applicationLoop() {
 				angleTarget = -angleTarget;
 
 			camera->setCameraTarget(target);
-			camera->setAngleTarget(angleTarget);
+			//camera->mouseMoveCamera(0.0, 15.0, deltaTime);
 			camera->updateCamera();
 			view = camera->getViewMatrix();
 
@@ -1083,6 +1121,20 @@ void applicationLoop() {
 			// Settea la matriz de vista y projection al shader de particulas de Jugador caminando
 			shaderJugadorCamina.setMatrix4("projection", 1, false, glm::value_ptr(projection));
 			shaderJugadorCamina.setMatrix4("view", 1, false, glm::value_ptr(view));
+
+		/*******************************************
+		 * Propiedades Neblina
+		 *******************************************/
+		shaderMulLighting.setVectorFloat3("fogColor", glm::value_ptr(glm::vec3(0.5, 0.5, 0.4)));
+		shaderMulLighting.setFloat("density", 0.01);
+		shaderMulLighting.setFloat("gradient", 0.33);
+
+		shaderTerrain.setVectorFloat3("fogColor", glm::value_ptr(glm::vec3(0.5, 0.5, 0.4)));
+		shaderTerrain.setFloat("density", 0.01);
+		shaderTerrain.setFloat("gradient", 0.33);
+
+		shaderSkybox.setVectorFloat3("fogColor", glm::value_ptr(glm::vec3(0.5, 0.5, 0.4)));
+
 
 			/*******************************************
 			 * Propiedades Luz direccional
@@ -1320,27 +1372,12 @@ void applicationLoop() {
 			for (size_t i = 0; i < bulletCollection.size(); i++)
 			{
 
-				bulletCollection[i]->UpdateColliderOBB(0.0f, glm::vec3(1, 0, 0), glm::vec3(0.05, 0.05, 0.05), glm::vec3(1.0));
+				bulletCollection[i]->UpdateColliderOBB(0.0f, glm::vec3(1, 0, 0), glm::vec3(0.5, 0.5, 0.5), glm::vec3(1.0));
 				addOrUpdateColliders(collidersOBB, "bullet" + std::to_string(i), bulletCollection[i]->GetOBB(), bulletCollection[i]->ModelMatrix);
 
 			}
 
 
-			// Lamps1 colliders
-			for (int i = 0; i < lamp1Position.size(); i++) {
-				AbstractModel::OBB lampCollider;
-				glm::mat4 modelMatrixColliderLamp = glm::mat4(1.0);
-				modelMatrixColliderLamp = glm::translate(modelMatrixColliderLamp, lamp1Position[i]);
-				modelMatrixColliderLamp = glm::rotate(modelMatrixColliderLamp, glm::radians(lamp1Orientation[i]),
-					glm::vec3(0, 1, 0));
-				// Set the orientation of collider before doing the scale
-				lampCollider.u = glm::quat_cast(modelMatrixColliderLamp);
-				modelMatrixColliderLamp = glm::scale(modelMatrixColliderLamp, glm::vec3(0.5, 0.5, 0.5));
-				modelMatrixColliderLamp = glm::translate(modelMatrixColliderLamp, modelLamp1.getObb().c);
-				lampCollider.c = glm::vec3(modelMatrixColliderLamp[3]);
-				lampCollider.e = modelLamp1.getObb().e * glm::vec3(0.5, 0.5, 0.5);
-				addOrUpdateColliders(collidersOBB, "lamp1-" + std::to_string(i), lampCollider, modelMatrixColliderLamp);
-			}
 
 			AbstractModel::SBB modelColliderRock;
 			glm::mat4 modelMatrixColliderRock = glm::mat4(matrixModelRock); // Mantenemos las transformaciones
@@ -1355,6 +1392,8 @@ void applicationLoop() {
 			/*******************************************
 			 * Render de colliders
 			 *******************************************/
+
+#if _DEBUG_FLAG
 			for (std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4> >::iterator it =
 				collidersOBB.begin(); it != collidersOBB.end(); it++) {
 				glm::mat4 matrixCollider = glm::mat4(1.0);
@@ -1375,22 +1414,7 @@ void applicationLoop() {
 				sphereCollider.enableWireMode();
 				sphereCollider.render(matrixCollider);
 			}
-
-			// Lamp2 Colliders.
-			for (size_t i = 0; i < lamp2Position.size(); i++)
-			{
-				AbstractModel::OBB modelColliderPost;
-				glm::mat4 modelColliderLampPost = glm::mat4(1.0);
-				modelColliderLampPost = glm::translate(modelColliderLampPost, lamp2Position[i]);
-				modelColliderLampPost = glm::rotate(modelColliderLampPost, glm::radians(lamp2Orientation[i]),
-					glm::vec3(0, 1, 0));
-				modelColliderPost.u = glm::quat_cast(modelColliderLampPost);
-				modelColliderLampPost = glm::scale(modelColliderLampPost, glm::vec3(1.0));
-				modelColliderLampPost = glm::translate(modelColliderLampPost, modelLampPost2.getObb().c);
-				modelColliderPost.c = modelColliderLampPost[3];
-				modelColliderPost.e = modelLampPost2.getObb().e * glm::vec3(1.0);
-				addOrUpdateColliders(collidersOBB, "lamp2-" + std::to_string(i), modelColliderPost, modelColliderLampPost);
-			}
+#endif
 
 			/*******************************************
 			 * Test Colisions
@@ -1404,8 +1428,9 @@ void applicationLoop() {
 					bool isCollision = false;
 					if (it != jt && testSphereSphereIntersection(
 						std::get<0>(it->second), std::get<0>(jt->second))) {
-
+#if _DEBUG_FLAG
 						std::cout << "Hay colision entre: " << it->first << " y el modelo: " << jt->first << std::endl;
+#endif																		
 						isCollision = true;
 
 
@@ -1425,33 +1450,61 @@ void applicationLoop() {
 					if (it != jt && testOBBOBB(
 						std::get<0>(it->second), std::get<0>(jt->second))) {
 
+						//TODO: add debug flags
+#if _DEBUG_FLAG
 						std::cout << "Hay colision entre: " << it->first << " y el modelo: " << jt->first << std::endl;
+#endif
 						isCollision = true;
-						
+
+						//Colision enemygo con jugador hiere al jugador.
 						if (it->first.compare("jugador") == 0 && jt->first.find("enemy") == 0) {
 							vidas -= 1;
+#if _DEBUG_FLAG
 							std::cout << "JUGADOR HERIDO!: " << vidas << std::endl;
+#endif
 						}
 
 						if (it->first.find("enemy") == 0 && jt->first.find("bullet") == 0) {
 							
+							
+
 							if (bulletCollection.size() > 0) {
 
+								//Obtenemos el indice de la bala por medio del indentificador generado por el collider.
 								std::string strindex = jt->first.substr(6, 3);
 								int index = std::stoi(strindex);
 
-								std::string strindexE = it->first.substr(5, 3);
-								int indexE = std::stoi(strindexE);
+								//Validar que el indice este dentro del rango de las balas. pues esta sección se ejecuta por cada frame que hubo colisión.
+								if (index >= 0 && index < bulletCollection.size()) {
+									
+									//Eliminar la bala de la colección de balas. y su collider
+									bulletCollection.erase(bulletCollection.begin() + index);
+									collidersOBB.erase(jt->first);
 
-								blendingUnsorted.find("particulasBlood")->second = glm::vec3(enemyCollection[indexE]->ModelMatrix[3]);
-
-								std::cout << "index: " << index << std::endl;
-								if (index >= 0 && index < bulletCollection.size() )
-									bulletCollection.erase(bulletCollection.begin() + index );
-								enemyCollection.erase(enemyCollection.begin() + indexE);
-								
-								ZombieBloodBool = true;
+								}
+									
 							}
+
+
+							if (enemyCollection.size() > 0) {
+							
+								//Obtenemos el indice del enemigo por medio del indentificador generado por el collider.
+								std::string strindex = it->first.substr(5, 3);
+								int index = std::stoi(strindex);
+
+								//Validar que el indice este dentro del rango de los enemigos. pues esta sección se ejecuta por cada frame que hubo colisión.
+								if (index >= 0 && index < enemyCollection.size()) {
+
+									//Marcar al zombie como muerto y borrar su collider.
+									//enemyCollection.erase(enemyCollection.begin() + index);
+									enemyCollection[index]->isDeath = true;
+									collidersOBB.erase(it->first);
+									
+								}
+
+							}
+
+
 
 						}
 
@@ -1468,7 +1521,9 @@ void applicationLoop() {
 				for (std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4>>::iterator jt = collidersOBB.begin(); jt != collidersOBB.end(); jt++)
 				{
 					if (testSphereOBox(std::get<0>(it->second), std::get<0>(jt->second))) {
+#if _DEBUG_FLAG
 						std::cout << " Hay colision del " << it->first << " y el modelo: " << jt->first << std::endl;
+#endif						
 						isCollision = true;
 						addOrUpdateCollisionDetection(collisionDetection, jt->first, true);
 					}
@@ -1520,7 +1575,8 @@ void applicationLoop() {
 
 						if (itCollision->first.find("bullet") == 0) {
 
-							
+							//Borramos las balas al chocar con cualquier cosa
+							collidersOBB.erase(itCollision->first);
 						}
 
 					}
@@ -1529,6 +1585,7 @@ void applicationLoop() {
 
 
 			}
+
 
 			//Generacion de un rayo
 			glm::mat4 modelMatrixRayMay = glm::mat4(mayowGameObject->ModelMatrix);
@@ -1543,7 +1600,7 @@ void applicationLoop() {
 			modelMatrixRayMay = glm::rotate(modelMatrixRayMay, glm::radians(90.0f), glm::vec3(1, 0, 0));
 			modelMatrixRayMay = glm::scale(modelMatrixRayMay, glm::vec3(0.05f, maxDistanceRay, 0.05f));
 
-			RayModel.render(modelMatrixRayMay);
+			//RayModel.render(modelMatrixRayMay);
 
 			//Rayo por modelos
 			for (size_t i = 0; i < enemyCollection.size(); i++)
@@ -1561,7 +1618,7 @@ void applicationLoop() {
 				modelMatrixRayEnemy = glm::rotate(modelMatrixRayEnemy, glm::radians(90.0f), glm::vec3(1, 0, 0));
 				modelMatrixRayEnemy = glm::scale(modelMatrixRayEnemy, glm::vec3(0.05f, maxDistanceRay, 0.05f));
 				//modelMatrixRayEnemy = glm::rotate(modelMatrixRayEnemy, glm::radians(90.0f), glm::vec3(0, 0, 1));
-				RayModel.render(modelMatrixRayEnemy);
+				//RayModel.render(modelMatrixRayEnemy);
 			}
 
 			//Realizar la colision rayo contra esfera. 
@@ -1570,7 +1627,9 @@ void applicationLoop() {
 			{
 				float tRint;
 				if (raySphereIntersect(origen, targetRay, rayDirection, std::get<0>(itSBB->second), tRint)) {
+#if _DEBUG_FLAG
 					std::cout << "Colision del rayo con el modelo" << itSBB->first << std::endl;
+#endif
 				}
 			}
 
@@ -1579,7 +1638,9 @@ void applicationLoop() {
 			for (itOBB = collidersOBB.begin(); itOBB != collidersOBB.end(); itOBB++)
 			{
 				if (testRayOBB(origen, targetRay, std::get<0>(itOBB->second))) {
+#if _DEBUG_FLAG
 					std::cout << "Colision del rayo con el modelo" << itOBB->first << std::endl;
+#endif
 				}
 			}
 
@@ -1598,8 +1659,7 @@ void applicationLoop() {
 			*******************************************/
 
 			drawGUIElement(textureHealthBarID, glm::vec3(0.08f, 0.15f, 0.15f), glm::vec3(-0.925f, 0.75f, 0.0f));
-			drawGUIElement(textureItemContainer, glm::vec3(0.08f, 0.15f, 0.15f), glm::vec3(-0.825f, 0.75f, 0.0f));
-
+			
 
 			glEnable(GL_BLEND);
 			
@@ -1609,6 +1669,12 @@ void applicationLoop() {
 			int minutes = (int)diffTime / 60;
 			int seconds = (int)diffTime % 60;
 			snprintf(buff, 100, "Tiempo: %d:%2d:%2d",hours,minutes,seconds);
+
+			//Cada 10 segundos incrementar la velocidad de los zombies.
+			if (seconds % 10 == 0) {
+				VELOCIDAD_MOVIMIENTO_ZOMBIE += 0.0001; //Incrementar levemente la velocidad de los zombies
+			}
+
 
 			if (TIEMPO_ENTRE_ZOMBIES >= 1)
 			{
@@ -1622,6 +1688,8 @@ void applicationLoop() {
 
 				}
 			}
+
+
 			
 #if _DEBUG_FLAG
 			std::cout << "tiempo entre zombies: " << TIEMPO_ENTRE_ZOMBIES << std::endl;
@@ -1629,6 +1697,10 @@ void applicationLoop() {
 			std::string cadenaTiempo = buff;
 
 			modelText->render((cadenaTiempo), -0.15, 0.8, 1.0, 0.0, 0.0, 42);
+			
+			modelText->render(("Salud: " + std::to_string(vidas)), -0.97, 0.4, 0.01, 0.0, 1.0, 32);
+			
+			
 			glDisable(GL_BLEND);
 
 
@@ -1648,7 +1720,16 @@ void applicationLoop() {
 			BGMusic0Pos[0] = camera->getPosition().x;
 			BGMusic0Pos[1] = camera->getPosition().y;
 			BGMusic0Pos[2] = camera->getPosition().z;
+
+			GunPos[0] = camera->getPosition().x;
+			GunPos[1] = camera->getPosition().y;
+			GunPos[2] = camera->getPosition().z;
+
+
 			alSourcefv(source[0], AL_POSITION, BGMusic0Pos);
+			alSourcefv(source[1], AL_POSITION, GunPos);
+
+
 
 			// Listener for the Camera.
 			listenerPos[0] = camera->getPosition().x;
@@ -1708,10 +1789,6 @@ void applicationLoop() {
 			glfwSwapBuffers(window);
 			
 		}
-
-		
-			
-
 		
 	}
 
@@ -1727,12 +1804,11 @@ void resetGame() {
 
 	vidas = 1000;
 	diffTime = 0;
+	VELOCIDAD_MOVIMIENTO_ZOMBIE = 0.001f;
 
 	enemyCollection.clear();
-	for (size_t i = 0; i < enemyCollection.size(); i++)
-	{
-		addOrUpdateColliders(collidersOBB, "enemy" + std::to_string(i), enemyCollection[i]->GetOBB(), glm::mat4(0.0f));
-	}
+	collidersOBB.clear();
+	
 	TIEMPO_ENTRE_ZOMBIES = 10;
 
 }
@@ -1764,27 +1840,34 @@ void generarZombie() {
 }
 
 void generarBala() {
-	float maxDistanceRayBala = 0.25;
+
 	bulletGameObject->ModelMatrix = glm::mat4(jugadorGameObject->ModelMatrix);
 	bulletGameObject->ModelMatrix = glm::translate(bulletGameObject->ModelMatrix, glm::vec3(0, 1.8, 0.5));
-	glm::vec3 dirBala = bulletGameObject->ModelMatrix[2];
-	glm::vec3 origenBala = bulletGameObject->ModelMatrix[3];
-	glm::vec3 midBala = origenBala + (dirBala * maxDistanceRayBala / 2.0f); //Partiendo de la ecuación canonica de la recta.
-
-	bulletGameObject->ModelMatrix[3] = glm::vec4(midBala, 1.0);
 	bulletGameObject->ModelMatrix = glm::rotate(bulletGameObject->ModelMatrix, glm::radians(90.0f), glm::vec3(1, 0, 0));
-	bulletGameObject->ModelMatrix = glm::scale(bulletGameObject->ModelMatrix, glm::vec3(0.05f, maxDistanceRayBala, 0.05f));
-
+	bulletGameObject->ModelMatrix = glm::scale(bulletGameObject->ModelMatrix, glm::vec3(0.4f, 0.4, 0.4f));
 	GameObject* temp = new GameObject();
 	memcpy(temp, bulletGameObject, sizeof(GameObject));
 
 	bulletCollection.push_back(temp);
 }
 
-void inicializerParticulas(GLuint* initVel, GLuint* startTime, GLuint* VAO, GLuint* numParticulas) {
-	// Generar los buffers para la sangre de zombie
-	glGenBuffers(1, initVel);//Buffer para las velocidades iniciales
-	glGenBuffers(1, startTime);//Buffer para los tiempos iniciales
+void prepareScene() {
+
+	bulletGameObject->ModelMatrix[3] = glm::vec4(midBala, 1.0);
+	bulletGameObject->ModelMatrix = glm::rotate(bulletGameObject->ModelMatrix, glm::radians(90.0f), glm::vec3(1, 0, 0));
+	bulletGameObject->ModelMatrix = glm::scale(bulletGameObject->ModelMatrix, glm::vec3(0.05f, maxDistanceRayBala, 0.05f));
+
+	modelRock.setShader(&shaderMulLighting);
+	terrain.setShader(&shaderTerrain);
+	jugadorGameObject->SetShader(&shaderMulLighting);
+	zombieGameObject->SetShader(&shaderMulLighting);
+
+	for (size_t i = 0; i < enemyCollection.size(); i++)
+	{
+		enemyCollection[i]->SetShader(&shaderMulLighting);
+	}
+	
+}
 
 	// Reservar el espacio para buffers
 	int size = (*numParticulas) * 3 * sizeof(float);
@@ -1793,27 +1876,15 @@ void inicializerParticulas(GLuint* initVel, GLuint* startTime, GLuint* VAO, GLui
 	glBindBuffer(GL_ARRAY_BUFFER, *startTime);
 	glBufferData(GL_ARRAY_BUFFER, (*numParticulas) * sizeof(float), NULL, GL_STATIC_DRAW);
 
-	// Llena la informacion del buffer de veocidades iniciales
-	glm::vec3 v(0.0f, 0.0f, 0.0f);
-	float velocity, theta, phi;
-	GLfloat* data = new GLfloat[(*numParticulas) * 3];
-	for (unsigned int i = 0; i < (*numParticulas); i++) {
-		theta = glm::mix(0.0f, glm::pi<float>() / 6.0f, ((float)rand() / RAND_MAX));
-		phi = glm::mix(0.0f, glm::two_pi<float>(), ((float)rand() / RAND_MAX));
+	modelRock.setShader(&shaderDepth);
+	terrain.setShader(&shaderDepth);
 
-		// Ecuacion de una esfera, las velidades se generan de acuerdo a lo esferico
-		/*v.x = sinf(theta) * cosf(phi);
-		v.y = cos(theta);
-		v.z = sinf(theta) * sinf(phi);*/
-		v.x = (float)rand() / RAND_MAX;
-		v.y = cosf(theta) * sinf(phi);
-		v.z = (float)rand() / RAND_MAX;
+	jugadorGameObject->SetShader(&shaderDepth);
+	zombieGameObject->SetShader(&shaderDepth);
 
-		velocity = glm::mix(0.6f, 0.8f, ((float)rand() / RAND_MAX));
-		v = glm::normalize(v) * velocity;
-		data[3 * i] = v.x;
-		data[3 * i + 1] = v.y;
-		data[3 * i + 2] = v.z;
+	for (size_t i = 0; i < enemyCollection.size(); i++)
+	{
+		enemyCollection[i]->SetShader(&shaderDepth);
 	}
 	glBindBuffer(GL_ARRAY_BUFFER, *initVel);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
@@ -1842,225 +1913,6 @@ void inicializerParticulas(GLuint* initVel, GLuint* startTime, GLuint* VAO, GLui
 	glBindBuffer(GL_ARRAY_BUFFER, *startTime);
 	glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, NULL);
 	glEnableVertexAttribArray(1);
-
-	glBindVertexArray(0);
-}
-
-//void inicializerParticulasZB() {
-//	// Generar los buffers para la sangre de zombie
-//	glGenBuffers(1, &initVelZB);//Buffer para las velocidades iniciales
-//	glGenBuffers(1, &startTimeZB);//Buffer para los tiempos iniciales
-//
-//	// Reservar el espacio para buffers
-//	int size = numParticulasZB * 3 * sizeof(float);
-//	glBindBuffer(GL_ARRAY_BUFFER, initVelZB);
-//	glBufferData(GL_ARRAY_BUFFER, size, NULL, GL_STATIC_DRAW);
-//	glBindBuffer(GL_ARRAY_BUFFER, startTimeZB);
-//	glBufferData(GL_ARRAY_BUFFER, numParticulasZB * sizeof(float), NULL, GL_STATIC_DRAW);
-//
-//	// Llena la informacion del buffer de veocidades iniciales
-//	glm::vec3 v(0.0f, 0.0f, 0.0f);
-//	float velocity, theta, phi;
-//	GLfloat* data = new GLfloat[numParticulasZB * 3];
-//	for (unsigned int i = 0; i < numParticulasZB; i++) {
-//		theta = glm::mix(0.0f, glm::pi<float>() / 6.0f, ((float)rand() / RAND_MAX));
-//		phi = glm::mix(0.0f, glm::two_pi<float>(), ((float)rand() / RAND_MAX));
-//
-//		// Ecuacion de una esfera, las velidades se generan de acuerdo a lo esferico
-//		/*v.x = sinf(theta) * cosf(phi);
-//		v.y = cos(theta);
-//		v.z = sinf(theta) * sinf(phi);*/
-//		v.x = (float)rand() / RAND_MAX;
-//		v.y = cosf(theta) * sinf(phi);
-//		v.z = (float)rand() / RAND_MAX;
-//
-//		velocity = glm::mix(0.6f, 0.8f, ((float)rand() / RAND_MAX));
-//		v = glm::normalize(v) * velocity;
-//		data[3 * i] = v.x;
-//		data[3 * i + 1] = v.y;
-//		data[3 * i + 2] = v.z;
-//	}
-//	glBindBuffer(GL_ARRAY_BUFFER, initVelZB);
-//	glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
-//
-//	// Llenar la infomación del tiempo de inicio
-//	delete[] data;
-//	data = new GLfloat[numParticulasZB];
-//	float time = 0.0;
-//	float rate = 0.00075f;
-//	for (unsigned int i = 0; i < numParticulasZB; i++) {
-//		data[i] = time;//time es el tiempo de "nacido" que tiene una partícula
-//		time += rate;
-//	}
-//	glBindBuffer(GL_ARRAY_BUFFER, startTimeZB);
-//	glBufferSubData(GL_ARRAY_BUFFER, 0, numParticulasZB * sizeof(float), data);
-//
-//	glBindBuffer(GL_ARRAY_BUFFER, 0);
-//	delete[] data;
-//
-//	glGenVertexArrays(1, &VAOZB);//Se pasa como referencia para poder modificarlo
-//	glBindVertexArray(VAOZB);
-//	glBindBuffer(GL_ARRAY_BUFFER, initVelZB);
-//	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);//DESPUES DE CUANTOS DATOS ESTÁ EL SIGUIENTE->penúltimo argumento
-//	glEnableVertexAttribArray(0);
-//
-//	glBindBuffer(GL_ARRAY_BUFFER, startTimeZB);
-//	glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, NULL);
-//	glEnableVertexAttribArray(1);
-//
-//	glBindVertexArray(0);
-//}
-
-//void inicializerParticulasJC() {
-//	// Generar los buffers para la sangre de zombie
-//	glGenBuffers(1, &initVelJC);//Buffer para las velocidades iniciales
-//	glGenBuffers(1, &startTimeJC);//Buffer para los tiempos iniciales
-//
-//	// Reservar el espacio para buffers
-//	int size = numParticulasJC * 3 * sizeof(float);
-//	glBindBuffer(GL_ARRAY_BUFFER, initVelJC);
-//	glBufferData(GL_ARRAY_BUFFER, size, NULL, GL_STATIC_DRAW);
-//	glBindBuffer(GL_ARRAY_BUFFER, startTimeJC);
-//	glBufferData(GL_ARRAY_BUFFER, numParticulasJC * sizeof(float), NULL, GL_STATIC_DRAW);
-//
-//	// Llena la informacion del buffer de veocidades iniciales
-//	glm::vec3 v(0.0f, 0.0f, 0.0f);
-//	float velocity, theta, phi;
-//	GLfloat* data = new GLfloat[numParticulasJC * 3];
-//	for (unsigned int i = 0; i < numParticulasJC; i++) {
-//		theta = glm::mix(0.0f, glm::pi<float>() / 6.0f, ((float)rand() / RAND_MAX));
-//		phi = glm::mix(0.0f, glm::two_pi<float>(), ((float)rand() / RAND_MAX));
-//
-//		v.x = (float)rand() / RAND_MAX;
-//		v.y = cosf(theta) * sinf(phi);
-//		v.z = (float)rand() / RAND_MAX;
-//
-//		velocity = glm::mix(0.6f, 0.8f, ((float)rand() / RAND_MAX));
-//		v = glm::normalize(v) * velocity;
-//		data[3 * i] = v.x;
-//		data[3 * i + 1] = v.y;
-//		data[3 * i + 2] = v.z;
-//	}
-//	glBindBuffer(GL_ARRAY_BUFFER, initVelJC);
-//	glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
-//
-//	// Llenar la infomación del tiempo de inicio
-//	delete[] data;
-//	data = new GLfloat[numParticulasJC];
-//	float time = 0.0;
-//	float rate = 0.00075f;
-//	for (unsigned int i = 0; i < numParticulasJC; i++) {
-//		data[i] = time;//time es el tiempo de "nacido" que tiene una partícula
-//		time += rate;
-//	}
-//	glBindBuffer(GL_ARRAY_BUFFER, startTimeJC);
-//	glBufferSubData(GL_ARRAY_BUFFER, 0, numParticulasJC * sizeof(float), data);
-//
-//	glBindBuffer(GL_ARRAY_BUFFER, 0);
-//	delete[] data;
-//
-//	glGenVertexArrays(1, &VAOJC);//Se pasa como referencia para poder modificarlo
-//	glBindVertexArray(VAOJC);
-//	glBindBuffer(GL_ARRAY_BUFFER, initVelJC);
-//	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);//DESPUES DE CUANTOS DATOS ESTÁ EL SIGUIENTE->penúltimo argumento
-//	glEnableVertexAttribArray(0);
-//
-//	glBindBuffer(GL_ARRAY_BUFFER, startTimeJC);
-//	glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, NULL);
-//	glEnableVertexAttribArray(1);
-//
-//	glBindVertexArray(0);
-//}
-
-/************* No funciona :( ***************/
-void renderPaticulas(bool pBool, int contador, int maxContador, double curr, double last, float tAnim, float tPar, float altura,
-	std::map<float, std::pair<std::string, glm::vec3> >::reverse_iterator itera, GLuint* nPar, GLuint* textureID, Shader shader) {
-	contador++;
-	if (contador >= maxContador) {
-		pBool = false;
-		contador = 0;
-	}
-	//Render de particulas de sangre
-	glm::mat4 modelMatrixParticulas = glm::mat4(1.0);
-	modelMatrixParticulas = glm::translate(modelMatrixParticulas, itera->second.second);
-	modelMatrixParticulas[3][1] = terrain.getHeightTerrain(modelMatrixParticulas[3][0],
-		modelMatrixParticulas[3][2]) + altura;//+5.0f es para la altura
-	curr = TimeManager::Instance().GetTime();//currTimeParticulasZombieBlood, lastTimeParticulasZombieBlood
-	if (curr - last > tAnim) {//Tiempo de la animacion
-		last = curr;
-	}
-	glDepthMask(GL_FALSE);
-	glPointSize(10.0f);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, *textureID);
-	shader.turnOn();
-	// Llamando al shader
-	shader.setFloat("Time", float(curr - last));
-	shader.setFloat("ParticleLifetime", tPar);//Este valor es para que duren mas las particulas
-	shader.setInt("ParticleTex", 0);
-	shader.setVectorFloat3("Gravity", glm::value_ptr(glm::vec3(0.0f, 0.1f, 0.0f)));//Este valor es para que vayan hacia arriba las particulas
-	shader.setMatrix4("model", 1, false, glm::value_ptr(modelMatrixParticulas));
-	glBindVertexArray(VAOZB);
-	glDrawArrays(GL_POINTS, 0, *nPar);
-	glDepthMask(GL_TRUE);
-	shader.turnOff();
-}
-
-void prepareScene() {
-
-	// Set Shaders for first pass
-
-	modelRock.setShader(&shaderMulLighting);
-	modelLamp1.setShader(&shaderMulLighting);
-	modelLamp2.setShader(&shaderMulLighting);
-	modelLampPost2.setShader(&shaderMulLighting);
-
-	terrain.setShader(&shaderTerrain);
-
-	mayowGameObject->SetShader(&shaderMulLighting);
-	jugadorGameObject->SetShader(&shaderMulLighting);
-	zombieGameObject->SetShader(&shaderMulLighting);
-
-	for (size_t i = 0; i < enemyCollection.size(); i++)
-	{
-		enemyCollection[i]->SetShader(&shaderMulLighting);
-	}
-	
-}
-
-void prepareDepthScene() {
-
-	modelRock.setShader(&shaderDepth);
-	modelLamp1.setShader(&shaderDepth);
-	modelLamp2.setShader(&shaderDepth);
-	modelLampPost2.setShader(&shaderDepth);
-
-	terrain.setShader(&shaderDepth);
-
-	mayowGameObject->SetShader(&shaderDepth);
-	jugadorGameObject->SetShader(&shaderDepth);
-	zombieGameObject->SetShader(&shaderDepth);
-
-	for (size_t i = 0; i < enemyCollection.size(); i++)
-	{
-		enemyCollection[i]->SetShader(&shaderDepth);
-	}
-
-	
-}
-
-void drawGUIElement(GLuint textureID, glm::vec3 scale, glm::vec3 pos) {
-
-	// Dibujado de una textura sola en pantalla.
-	shaderViewTexture.setMatrix4("view", 1, false, glm::value_ptr(glm::mat4(1.0f)));
-	shaderViewTexture.setMatrix4("projection", 1, false, glm::value_ptr(glm::mat4(1.0f)));
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, textureID);
-	boxRenderImagen.setScale(scale);
-	boxRenderImagen.setPosition(pos);
-	boxRenderImagen.render();
-}
 
 void renderScene(bool renderParticles) {
 	/*******************************************
@@ -2107,61 +1959,9 @@ void renderScene(bool renderParticles) {
 
 
 
-
-	// Lambo car
-	glDisable(GL_CULL_FACE);
-	// Se regresa el cull faces IMPORTANTE para las puertas
-	glEnable(GL_CULL_FACE);
-
-	// Render the lamps
-	for (int i = 0; i < lamp1Position.size(); i++) {
-		lamp1Position[i].y = terrain.getHeightTerrain(lamp1Position[i].x, lamp1Position[i].z);
-		modelLamp1.setPosition(lamp1Position[i]);
-		modelLamp1.setScale(glm::vec3(0.5, 0.5, 0.5));
-		modelLamp1.setOrientation(glm::vec3(0, lamp1Orientation[i], 0));
-		modelLamp1.render();
-
-
-		Lamparas[i]->Rotate(lamp1Orientation[i], glm::vec3(0, 1, 0));
-	}
-
-	for (int i = 0; i < lamp2Position.size(); i++) {
-		lamp2Position[i].y = terrain.getHeightTerrain(lamp2Position[i].x, lamp2Position[i].z);
-		modelLamp2.setPosition(lamp2Position[i]);
-		modelLamp2.setScale(glm::vec3(1.0, 1.0, 1.0));
-		modelLamp2.setOrientation(glm::vec3(0, lamp2Orientation[i], 0));
-		modelLamp2.render();
-		modelLampPost2.setPosition(lamp2Position[i]);
-		modelLampPost2.setScale(glm::vec3(1.0, 1.0, 1.0));
-		modelLampPost2.setOrientation(glm::vec3(0, lamp2Orientation[i], 0));
-		modelLampPost2.render();
-	}
-
-
-
 	/*******************************************
 	* RENDER & ACTUALIZACI�N DE NUESTROS OBJETOS.
 	*******************************************/
-
-		 // Mayow
-		  // Se modifica para tener un tiro parabolico como salto. 
-	mayowGameObject->ModelMatrix[3][1] = -gravity * tmv * tmv + 3.0 * tmv + terrain.getHeightTerrain(mayowGameObject->ModelMatrix[3][0], mayowGameObject->ModelMatrix[3][2]);
-
-	tmv = currTime - startTimeJump;
-
-
-	if (mayowGameObject->ModelMatrix[3][1] < terrain.getHeightTerrain(mayowGameObject->ModelMatrix[3][0], mayowGameObject->ModelMatrix[3][2])) {
-		isJump = false;
-		mayowGameObject->ModelMatrix[3][1] = terrain.getHeightTerrain(mayowGameObject->ModelMatrix[3][0], mayowGameObject->ModelMatrix[3][2]);
-
-	}
-
-	mayowGameObject->Transform = glm::mat4(mayowGameObject->ModelMatrix);
-	mayowGameObject->SetScale(glm::vec3(0.021, 0.021, 0.021));
-	mayowGameObject->animationIndex = animationIndex;
-	mayowGameObject->Draw();
-
-
 	// Jugador
 	jugadorGameObject->ModelMatrix[3][1] = terrain.getHeightTerrain(jugadorGameObject->ModelMatrix[3][0], jugadorGameObject->ModelMatrix[3][2]);
 	jugadorGameObject->animationIndex = animationIndexPlayer;
@@ -2184,149 +1984,104 @@ void renderScene(bool renderParticles) {
 	for (size_t i = 0; i < enemyCollection.size(); i++)
 	{
 
+
+		//Verificar si el zombie esta vivo o no.
+		if (enemyCollection[i]->isDeath)
+		{
+			enemyCollection[i]->animationIndex = 0;
+			enemyCollection[i]->ModelMatrix = glm::translate(enemyCollection[i]->ModelMatrix, glm::vec3(0, -100, 0));
+		}
+		else {
+
+			
+			//Obtenemos la posici�n del jugador y del zombie
+			glm::vec3 targetPos = glm::vec3(jugadorGameObject->ModelMatrix[3][0], jugadorGameObject->ModelMatrix[3][1], jugadorGameObject->ModelMatrix[3][2]);
+			glm::vec3 currPos = glm::vec3(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][1], enemyCollection[i]->ModelMatrix[3][2]);
+
+			//Obtenemos la direcci�n hacia el jugador
+			glm::vec3 direction = glm::normalize(targetPos - currPos);
+			glm::vec3 currDirection = glm::normalize(enemyCollection[i]->ModelMatrix[2]);
+
+
+			glm::mat4 currentTransform = enemyCollection[i]->ModelMatrix;	//Almacenamos temporalmente la matriz de transformaci�n del zombie para poder rotarla.
+
+
+			float dot = glm::dot(direction, currDirection);			//producto punto para encontrar despues el angulo entre las direcciones.
+			glm::vec3 cross = glm::cross(direction, currDirection); //producto cruz para encontrar la direcci�n de rotaci�n. El vector perdendicular resultante es el eje Y. (UP)
+
+			glm::clamp(dot, -1.0f, 1.0f);
+			float angulo = acos(dot);
+
+			if (direction != currDirection)
+			{
+				if (cross.y < 0)
+					enemyCollection[i]->ModelMatrix = glm::rotate(currentTransform, glm::radians(angulo), glm::vec3(0, 1, 0));
+				if (cross.y > 0)
+					enemyCollection[i]->ModelMatrix = glm::rotate(currentTransform, glm::radians(-angulo), glm::vec3(0, 1, 0));
+			}
+			else
+			{
+				enemyCollection[i]->ModelMatrix = glm::rotate(currentTransform, glm::radians(0.0f), glm::vec3(0, 1, 0));
+			}
+
+
+			glm::vec3 goal = (enemyCollection[i]->ModelMatrix[2]);
+			enemyCollection[i]->ModelMatrix = glm::translate(enemyCollection[i]->ModelMatrix, -currDirection * VELOCIDAD_MOVIMIENTO_ZOMBIE);
+			enemyCollection[i]->animationIndex = 1;
+		}
+
+
+		int seconds = (int)diffTime % 60;
+		//Revisar cada 4 segundos si la animacion de muerte termino para borrar al zombi
+		if (enemyCollection[i]->isDeath && enemyCollection[i]->animationIndex == 0)
+		{
+			if( seconds % 4 == 0)
+				enemyCollection.erase(enemyCollection.begin() + i);
+		}
+
 		//Actualizar altura a la del terreno.
-		enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(zombieGameObject->ModelMatrix[3][0], zombieGameObject->ModelMatrix[3][2]);
+		enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][2]);
 		enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][2]);
 
-		//Obtenemos la posici�n del jugador y del zombie
-		glm::vec3 targetPos = glm::vec3(jugadorGameObject->ModelMatrix[3][0], jugadorGameObject->ModelMatrix[3][1], jugadorGameObject->ModelMatrix[3][2]);	
-		glm::vec3 currPos = glm::vec3(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][1], enemyCollection[i]->ModelMatrix[3][2]);
-
-		//Obtenemos la direcci�n hacia el jugador
-		glm::vec3 direction = glm::normalize(targetPos - currPos);
-		glm::vec3 currDirection = glm::normalize(enemyCollection[i]->ModelMatrix[2]);
 		
-			
-		glm::mat4 currentTransform = enemyCollection[i]->ModelMatrix;	//Almacenamos temporalmente la matriz de transformaci�n del zombie para poder rotarla.
-
-
-		float dot = glm::dot(direction, currDirection);			//producto punto para encontrar despues el angulo entre las direcciones.
-		glm::vec3 cross = glm::cross(direction, currDirection); //producto cruz para encontrar la direcci�n de rotaci�n. El vector perdendicular resultante es el eje Y. (UP)
-
-		glm::clamp(dot, -1.0f, 1.0f);
-		float angulo = acos(dot);
-
-		if (direction != currDirection)
-		{
-			if (cross.y < 0)
-					enemyCollection[i]->ModelMatrix = glm::rotate(currentTransform, glm::radians(angulo), glm::vec3(0, 1, 0));
-			if (cross.y > 0)		
-					enemyCollection[i]->ModelMatrix = glm::rotate(currentTransform, glm::radians(-angulo), glm::vec3(0, 1, 0));
-		}
-		else
-		{
-			enemyCollection[i]->ModelMatrix = glm::rotate(currentTransform, glm::radians(0.0f), glm::vec3(0, 1, 0));
-		}
-
-
-
-		/*if (i == 0) {
-			std::cout << "Angulo: " << glm::degrees(angulo) << "  crozz.y : " << cross.y << std::endl;
-			
-		}*/
-		glm::vec3 goal = (enemyCollection[i]->ModelMatrix[2]);
-		enemyCollection[i]->ModelMatrix = glm::translate(enemyCollection[i]->ModelMatrix,  -currDirection * VELOCIDAD_MOVIMIENTO_ZOMBIE);
-			
-
-		//
-		//////Obtener el angulo entre el zombie y el jugador.
-		////float angle = glm::atan(z, x);
-		////float dangle = glm::degrees(angle)  ;
-
-		////
-		
-		////
-
-		////Aplicar rotaci�n al zombie
-		//enemyCollection[i]->ModelMatrix[0][0] = glm::cos(glm::radians(dangle));
-		//enemyCollection[i]->ModelMatrix[0][2] = glm::sin(glm::radians(dangle));
-		//enemyCollection[i]->ModelMatrix[2][0] = -glm::sin(	glm::radians(dangle));
-		//enemyCollection[i]->ModelMatrix[2][2] = glm::cos(glm::radians(dangle));
-		//
-
-		//if (dangle > 0)
-		//	enemyCollection[i]->Rotate(180.0f, glm::vec3(0, 1, 0));
-		//else
-		//	enemyCollection[i]->Rotate(-90.0f, glm::vec3(0, 1, 0));
-
-
-		enemyCollection[i]->animationIndex = 1;
 		enemyCollection[i]->Transform = glm::mat4(enemyCollection[i]->ModelMatrix);
 		enemyCollection[i]->SetScale(glm::vec3(0.00015, 0.00015, 0.00015));
 		enemyCollection[i]->Draw();
 	}
 
 	// LOGICA DE LA BALA.
-	float maxDistanceRayBala = 0.25;
+	float maxDistanceBala = 27;
 
 	if(!bulletCollection.empty() )
 		for (size_t i = 0; i < bulletCollection.size(); i++)
 		{
-			glm::vec3 currDirection = glm::normalize(bulletCollection[i]->ModelMatrix[2]);
-			bulletCollection[i]->ModelMatrix = glm::translate(bulletCollection[i]->ModelMatrix, -currDirection * VELOCIDAD_BALA);
+
+			//Calcular distancia entre bala y jugador
+			glm::vec3 targetPos = glm::vec3(jugadorGameObject->ModelMatrix[3][0], jugadorGameObject->ModelMatrix[3][1], jugadorGameObject->ModelMatrix[3][2]);
+			glm::vec3 currPos = glm::vec3(bulletCollection[i]->ModelMatrix[3][0], bulletCollection[i]->ModelMatrix[3][1], bulletCollection[i]->ModelMatrix[3][2]);
+			float distance = glm::distance(targetPos, currPos);
 
 
-			bulletCollection[i]->DrawCyl(bulletCollection[i]->ModelMatrix);
+			if (distance > maxDistanceBala)
+			{
+				bulletCollection[i]->ModelMatrix = glm::translate(bulletCollection[i]->ModelMatrix, glm::vec3(1000.0f, -1000.0f, -1000.0f)); //Mover al piso para no dejar el collider.
+				bulletCollection[i]->UpdateColliderOBB(0.0f, glm::vec3(1, 0, 0), glm::vec3(0.05, 0.05, 0.05), glm::vec3(1.0));
+				addOrUpdateColliders(collidersOBB, "bullet" + std::to_string(i), bulletCollection[i]->GetOBB(), glm::mat4(0.0f));
+				collidersOBB.erase("bullet"+ std::to_string(i)); //Eliminar el collider de la bala.
 
+
+				bulletCollection.erase(bulletCollection.begin() + i);
+			}
+			else {
+				glm::vec3 currDirection = glm::normalize(bulletCollection[i]->ModelMatrix[2]);
+				bulletCollection[i]->ModelMatrix = glm::translate(bulletCollection[i]->ModelMatrix, -currDirection * VELOCIDAD_BALA);
+				bulletCollection[i]->Transform = glm::mat4(bulletCollection[i]->ModelMatrix);
+				bulletCollection[i]->Draw();
+			}
 		}
 
-
 	
 
-	
-
-	//zombiePlaceHolder.setColor(glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	//zombiePlaceHolder.setPosition(glm::vec3(rnd_x, (terrain.getHeightTerrain(zombiePlaceHolder.getPosition().x, zombiePlaceHolder.getPosition().z)), rnd_z));
-	////zombiePlaceHolder.render();
-
-	//if (zombieContainer.size() < NUMERO_ENEMIGOS) {
-	//	zombieContainer.push_back(zombiePlaceHolder);
-	//}
-	
-
-
-	
-	zombieOffset += 0;
-	#if _DEBUG_FLAG
-	std::cout<< "enemy collection size: " << enemyCollection.size() << std::endl;
-	std::cout << "RNG : " << distrib(generador) << std::endl;
-	#endif
-
-		//for (int i = 0; i < zombieContainer.size(); i++) {
-
-		//	//zombieContainer[i].setPosition(glm::vec3(3.0 + i, (terrain.getHeightTerrain(zombieContainer[i].getPosition().x, zombieContainer[i].getPosition().z)), 2.0));
-		//	zombieContainer[i].setColor(glm::vec4(0.5f, 1.0f, 0.5f, 1.0f));
-		//	zombieContainer[i].setScale(glm::vec3(0.7, 1.7, 0.7));
-		//	zombieContainer[i].render(mayowGameObject->ModelMatrix);
-		//	
-		//	
-		//	//zombieGameObjects[i].Draw();
-		//	
-		//}
-
-	
-
-}
-
-void startScene(std::string sceneName) {
-
-	if (sceneName == "MainGame") {
-		//Pseudocode: 
-		//  destroyAllOtherScenes();
-		//	applicationLoop();
-		//	
-	}
-
-	if (sceneName == "MainMenu") {
-
-		//Pseudocode: 
-		//	saveApplicationLoopState();
-		//	DrawGUI();
-		//  CheckForInput();
-		//	DoSomething();
-		//  UponExistDestroy();
-		//	
-	}
 }
 
 
