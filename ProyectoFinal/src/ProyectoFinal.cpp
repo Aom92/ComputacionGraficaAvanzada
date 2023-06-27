@@ -115,10 +115,6 @@ Model modelRock;
 Model modelHeliChasis;
 Model modelHeliHeli;
 
-// Lamparas - iluminaci�n.
-Model modelLamp1;
-Model modelLamp2;
-Model modelLampPost2;
 
 // Modelos animados: 
 // Pruebas:
@@ -264,8 +260,8 @@ GLuint depthMap, depthMapFBO;
  **********************/
 
 // OpenAL Defines
-#define NUM_BUFFERS 1
-#define NUM_SOURCES 1
+#define NUM_BUFFERS 3
+#define NUM_SOURCES 2
 #define NUM_ENVIRONMENTS 1
 // Listener
 ALfloat listenerPos[] = { 0.0, 0.0, 4.0 };
@@ -275,8 +271,8 @@ ALfloat listenerOri[] = { 0.0, 0.0, 1.0, 0.0, 1.0, 0.0 };
 ALfloat BGMusic0Pos[] = { -2.0, 0.0, 0.0 };
 ALfloat BGMusic0Vel[] = { 0.0, 0.0, 0.0 };
 // Source 1
-ALfloat FootStepPos[] = { 2.0, 0.0, 0.0 };
-ALfloat FootStepVel[] = { 0.0, 0.0, 0.0 };
+ALfloat GunPos[] = { 2.0, 0.0, 0.0 };
+ALfloat GunVel[] = { 0.0, 0.0, 0.0 };
 
 // Buffers
 ALuint buffer[NUM_BUFFERS];
@@ -288,7 +284,7 @@ ALenum format;
 ALvoid *data;
 int ch;
 ALboolean loop;
-std::vector<bool> sourcesPlay = { true, true };
+std::vector<bool> sourcesPlay = { true, false };
 
 // *-------------------------------------------------*
 // *--------   PROTOTIPOS DE FUNCIONES        -------*
@@ -426,13 +422,7 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	
 	terrain.setPosition(glm::vec3(100, 0, 100));
 
-	//Lamp models
-	modelLamp1.loadModel("../models/Street-Lamp-Black/objLamp.obj");
-	modelLamp1.setShader(&shaderMulLighting);
-	modelLamp2.loadModel("../models/Street_Light/Lamp.obj");
-	modelLamp2.setShader(&shaderMulLighting);
-	modelLampPost2.loadModel("../models/Street_Light/LampPost.obj");
-	modelLampPost2.setShader(&shaderMulLighting);
+
 	
 	// Modelo de pruebas: Mayow
 
@@ -576,6 +566,7 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	// Generate buffers, or else no sound will happen!
 	alGenBuffers(NUM_BUFFERS, buffer);
 	buffer[0] = alutCreateBufferFromFile("../sounds/bg01.wav");
+	buffer[1] = alutCreateBufferFromFile("../sounds/gunshot.wav");
 	//buffer[1] = alutCreateBufferFromFile("../sounds/walk.wav");
 	int errorAlut = alutGetError();
 	if (errorAlut != ALUT_ERROR_NO_ERROR) {
@@ -598,6 +589,14 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	alSourcei(source[0], AL_BUFFER, buffer[0]);
 	alSourcei(source[0], AL_LOOPING, AL_TRUE);
 	alSourcef(source[0], AL_MAX_DISTANCE, 2000);
+
+	alSourcef( source[1], AL_PITCH, 1.0f);
+	alSourcef( source[1], AL_GAIN, 3.0f);
+	alSourcefv(source[1], AL_POSITION, GunPos);
+	alSourcefv(source[1], AL_VELOCITY, GunVel);
+	alSourcei( source[1], AL_BUFFER, buffer[1]);
+	alSourcei( source[1], AL_LOOPING, AL_TRUE);
+	alSourcef( source[1], AL_MAX_DISTANCE, 2000);
 
 	startupTimer = TimeManager::Instance().GetTime();
 
@@ -672,9 +671,7 @@ void destroy() {
 	modelHeliChasis.destroy();
 	modelHeliHeli.destroy();
 	modelRock.destroy();
-	modelLamp1.destroy();
-	modelLamp2.destroy();
-	modelLampPost2.destroy();
+
 
 	// Custom objects animate
 	/*mayowModelAnimate.destroy();*/
@@ -823,6 +820,7 @@ bool processInput(bool continueApplication) {
 		//Wait for Release
 		if (btnApress && buttons[5] == GLFW_RELEASE) {
 			generarBala();
+			alSourcePlay(source[1]);
 			btnApress = false;
 		}
 		
@@ -1225,21 +1223,6 @@ void applicationLoop() {
 			}
 
 
-			// Lamps1 colliders
-			for (int i = 0; i < lamp1Position.size(); i++) {
-				AbstractModel::OBB lampCollider;
-				glm::mat4 modelMatrixColliderLamp = glm::mat4(1.0);
-				modelMatrixColliderLamp = glm::translate(modelMatrixColliderLamp, lamp1Position[i]);
-				modelMatrixColliderLamp = glm::rotate(modelMatrixColliderLamp, glm::radians(lamp1Orientation[i]),
-					glm::vec3(0, 1, 0));
-				// Set the orientation of collider before doing the scale
-				lampCollider.u = glm::quat_cast(modelMatrixColliderLamp);
-				modelMatrixColliderLamp = glm::scale(modelMatrixColliderLamp, glm::vec3(0.5, 0.5, 0.5));
-				modelMatrixColliderLamp = glm::translate(modelMatrixColliderLamp, modelLamp1.getObb().c);
-				lampCollider.c = glm::vec3(modelMatrixColliderLamp[3]);
-				lampCollider.e = modelLamp1.getObb().e * glm::vec3(0.5, 0.5, 0.5);
-				addOrUpdateColliders(collidersOBB, "lamp1-" + std::to_string(i), lampCollider, modelMatrixColliderLamp);
-			}
 
 			AbstractModel::SBB modelColliderRock;
 			glm::mat4 modelMatrixColliderRock = glm::mat4(matrixModelRock); // Mantenemos las transformaciones
@@ -1275,21 +1258,6 @@ void applicationLoop() {
 				sphereCollider.render(matrixCollider);
 			}
 
-			// Lamp2 Colliders.
-			for (size_t i = 0; i < lamp2Position.size(); i++)
-			{
-				AbstractModel::OBB modelColliderPost;
-				glm::mat4 modelColliderLampPost = glm::mat4(1.0);
-				modelColliderLampPost = glm::translate(modelColliderLampPost, lamp2Position[i]);
-				modelColliderLampPost = glm::rotate(modelColliderLampPost, glm::radians(lamp2Orientation[i]),
-					glm::vec3(0, 1, 0));
-				modelColliderPost.u = glm::quat_cast(modelColliderLampPost);
-				modelColliderLampPost = glm::scale(modelColliderLampPost, glm::vec3(1.0));
-				modelColliderLampPost = glm::translate(modelColliderLampPost, modelLampPost2.getObb().c);
-				modelColliderPost.c = modelColliderLampPost[3];
-				modelColliderPost.e = modelLampPost2.getObb().e * glm::vec3(1.0);
-				addOrUpdateColliders(collidersOBB, "lamp2-" + std::to_string(i), modelColliderPost, modelColliderLampPost);
-			}
 
 			/*******************************************
 			 * Test Colisions
@@ -1586,7 +1554,16 @@ void applicationLoop() {
 			BGMusic0Pos[0] = camera->getPosition().x;
 			BGMusic0Pos[1] = camera->getPosition().y;
 			BGMusic0Pos[2] = camera->getPosition().z;
+
+			GunPos[0] = camera->getPosition().x;
+			GunPos[1] = camera->getPosition().y;
+			GunPos[2] = camera->getPosition().z;
+
+
 			alSourcefv(source[0], AL_POSITION, BGMusic0Pos);
+			alSourcefv(source[1], AL_POSITION, GunPos);
+
+
 
 			// Listener for the Camera.
 			listenerPos[0] = camera->getPosition().x;
@@ -1646,10 +1623,6 @@ void applicationLoop() {
 			glfwSwapBuffers(window);
 			
 		}
-
-		
-			
-
 		
 	}
 
@@ -1665,12 +1638,11 @@ void resetGame() {
 
 	vidas = 1000;
 	diffTime = 0;
+	VELOCIDAD_MOVIMIENTO_ZOMBIE = 0.001f;
 
 	enemyCollection.clear();
-	for (size_t i = 0; i < enemyCollection.size(); i++)
-	{
-		addOrUpdateColliders(collidersOBB, "enemy" + std::to_string(i), enemyCollection[i]->GetOBB(), glm::mat4(0.0f));
-	}
+	collidersOBB.clear();
+	
 	TIEMPO_ENTRE_ZOMBIES = 10;
 
 }
@@ -1718,13 +1690,7 @@ void prepareScene() {
 	// Set Shaders for first pass
 
 	modelRock.setShader(&shaderMulLighting);
-	modelLamp1.setShader(&shaderMulLighting);
-	modelLamp2.setShader(&shaderMulLighting);
-	modelLampPost2.setShader(&shaderMulLighting);
-
 	terrain.setShader(&shaderTerrain);
-
-	mayowGameObject->SetShader(&shaderMulLighting);
 	jugadorGameObject->SetShader(&shaderMulLighting);
 	zombieGameObject->SetShader(&shaderMulLighting);
 
@@ -1738,13 +1704,8 @@ void prepareScene() {
 void prepareDepthScene() {
 
 	modelRock.setShader(&shaderDepth);
-	modelLamp1.setShader(&shaderDepth);
-	modelLamp2.setShader(&shaderDepth);
-	modelLampPost2.setShader(&shaderDepth);
-
 	terrain.setShader(&shaderDepth);
 
-	mayowGameObject->SetShader(&shaderDepth);
 	jugadorGameObject->SetShader(&shaderDepth);
 	zombieGameObject->SetShader(&shaderDepth);
 
@@ -1814,61 +1775,9 @@ void renderScene(bool renderParticles) {
 
 
 
-
-	// Lambo car
-	glDisable(GL_CULL_FACE);
-	// Se regresa el cull faces IMPORTANTE para las puertas
-	glEnable(GL_CULL_FACE);
-
-	// Render the lamps
-	for (int i = 0; i < lamp1Position.size(); i++) {
-		lamp1Position[i].y = terrain.getHeightTerrain(lamp1Position[i].x, lamp1Position[i].z);
-		modelLamp1.setPosition(lamp1Position[i]);
-		modelLamp1.setScale(glm::vec3(0.5, 0.5, 0.5));
-		modelLamp1.setOrientation(glm::vec3(0, lamp1Orientation[i], 0));
-		modelLamp1.render();
-
-
-		Lamparas[i]->Rotate(lamp1Orientation[i], glm::vec3(0, 1, 0));
-	}
-
-	for (int i = 0; i < lamp2Position.size(); i++) {
-		lamp2Position[i].y = terrain.getHeightTerrain(lamp2Position[i].x, lamp2Position[i].z);
-		modelLamp2.setPosition(lamp2Position[i]);
-		modelLamp2.setScale(glm::vec3(1.0, 1.0, 1.0));
-		modelLamp2.setOrientation(glm::vec3(0, lamp2Orientation[i], 0));
-		modelLamp2.render();
-		modelLampPost2.setPosition(lamp2Position[i]);
-		modelLampPost2.setScale(glm::vec3(1.0, 1.0, 1.0));
-		modelLampPost2.setOrientation(glm::vec3(0, lamp2Orientation[i], 0));
-		modelLampPost2.render();
-	}
-
-
-
 	/*******************************************
 	* RENDER & ACTUALIZACI�N DE NUESTROS OBJETOS.
 	*******************************************/
-
-		 // Mayow
-		  // Se modifica para tener un tiro parabolico como salto. 
-	mayowGameObject->ModelMatrix[3][1] = -gravity * tmv * tmv + 3.0 * tmv + terrain.getHeightTerrain(mayowGameObject->ModelMatrix[3][0], mayowGameObject->ModelMatrix[3][2]);
-
-	tmv = currTime - startTimeJump;
-
-
-	if (mayowGameObject->ModelMatrix[3][1] < terrain.getHeightTerrain(mayowGameObject->ModelMatrix[3][0], mayowGameObject->ModelMatrix[3][2])) {
-		isJump = false;
-		mayowGameObject->ModelMatrix[3][1] = terrain.getHeightTerrain(mayowGameObject->ModelMatrix[3][0], mayowGameObject->ModelMatrix[3][2]);
-
-	}
-
-	mayowGameObject->Transform = glm::mat4(mayowGameObject->ModelMatrix);
-	mayowGameObject->SetScale(glm::vec3(0.021, 0.021, 0.021));
-	mayowGameObject->animationIndex = animationIndex;
-	mayowGameObject->Draw();
-
-
 	// Jugador
 	jugadorGameObject->ModelMatrix[3][1] = terrain.getHeightTerrain(jugadorGameObject->ModelMatrix[3][0], jugadorGameObject->ModelMatrix[3][2]);
 	jugadorGameObject->animationIndex = animationIndexPlayer;
@@ -1987,63 +1896,8 @@ void renderScene(bool renderParticles) {
 			}
 		}
 
-
 	
 
-	
-
-	//zombiePlaceHolder.setColor(glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
-	//zombiePlaceHolder.setPosition(glm::vec3(rnd_x, (terrain.getHeightTerrain(zombiePlaceHolder.getPosition().x, zombiePlaceHolder.getPosition().z)), rnd_z));
-	////zombiePlaceHolder.render();
-
-	//if (zombieContainer.size() < NUMERO_ENEMIGOS) {
-	//	zombieContainer.push_back(zombiePlaceHolder);
-	//}
-	
-
-
-	
-	zombieOffset += 0;
-	#if _DEBUG_FLAG
-	std::cout<< "enemy collection size: " << enemyCollection.size() << std::endl;
-	std::cout << "RNG : " << distrib(generador) << std::endl;
-	#endif
-
-		//for (int i = 0; i < zombieContainer.size(); i++) {
-
-		//	//zombieContainer[i].setPosition(glm::vec3(3.0 + i, (terrain.getHeightTerrain(zombieContainer[i].getPosition().x, zombieContainer[i].getPosition().z)), 2.0));
-		//	zombieContainer[i].setColor(glm::vec4(0.5f, 1.0f, 0.5f, 1.0f));
-		//	zombieContainer[i].setScale(glm::vec3(0.7, 1.7, 0.7));
-		//	zombieContainer[i].render(mayowGameObject->ModelMatrix);
-		//	
-		//	
-		//	//zombieGameObjects[i].Draw();
-		//	
-		//}
-
-	
-
-}
-
-void startScene(std::string sceneName) {
-
-	if (sceneName == "MainGame") {
-		//Pseudocode: 
-		//  destroyAllOtherScenes();
-		//	applicationLoop();
-		//	
-	}
-
-	if (sceneName == "MainMenu") {
-
-		//Pseudocode: 
-		//	saveApplicationLoopState();
-		//	DrawGUI();
-		//  CheckForInput();
-		//	DoSomething();
-		//  UponExistDestroy();
-		//	
-	}
 }
 
 
