@@ -239,18 +239,6 @@ GameState state = TITLE;
 int animationIndex = 1;
 int animationIndexPlayer = 1;
 
-// Var animate lambo dor
-int stateDoor = 0;
-float dorRotCount = 0.0;
-
-// Lamps positions
-std::vector<glm::vec3> lamp1Position = { glm::vec3(-7.03, 0, -19.14), glm::vec3(
-		24.41, 0, -34.57), glm::vec3(-10.15, 0, -54.10) };
-std::vector<float> lamp1Orientation = { -17.0, -82.67, 23.70 };
-std::vector<glm::vec3> lamp2Position = { glm::vec3(-36.52, 0, -23.24),
-		glm::vec3(-52.73, 0, -3.90) };
-std::vector<float> lamp2Orientation = { 21.37 + 90, -65.0 + 90 };
-
 // Blending model unsorted
 std::map<std::string, glm::vec3> blendingUnsorted = {
 	{"particulasBlood", glm::vec3(0.0)},
@@ -329,11 +317,7 @@ void prepareScene();
 void prepareDepthScene();
 void renderScene(bool renderParticles = true);
 // funciones para el comportamiento del juego
-void spawnZombie(glm::vec3 spawnPositions);
-void followPlayer();
-void checkCollisions();
-void checkCollisionsZombie();
-void checkCollisionsDisparo();
+
 
 void generarZombie();
 void generarBala();
@@ -557,7 +541,7 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	loadTexture("../Textures/Blood-1.png", &textureParticleZombieBloodID);
 	inicializerParticulas(&initVelZB, &startTimeZB, &VAOZB, &numParticulasZB);
 	//inicializerParticulasZB();
-	loadTexture("../Textures/fire.png", &textureParticleJugadorCaminaID);
+	loadTexture("../Textures/smoke.png", &textureParticleJugadorCaminaID);
 	inicializerParticulas(&initVelJC, &startTimeJC, &VAOJC, &numParticulasJC);
 	//inicializerParticulasJC();
 
@@ -840,6 +824,7 @@ bool processInput(bool continueApplication) {
 			jugadorGameObject->ModelMatrix[3][0] += -axes[0] * VELOCIDAD_MOVIMIENTO_PERSONAJE;
 			jugadorGameObject->ModelMatrix[3][2] += axes[1] * VELOCIDAD_MOVIMIENTO_PERSONAJE;
 			animationIndexPlayer = 2;
+			JugadorCaminaBool = true;
 		}
 
 		//Rotar al personaje Stick Derecho
@@ -974,6 +959,9 @@ bool processInput(bool continueApplication) {
 		generarBala();
 
 	}
+
+	if (JugadorCaminaBool)
+		blendingUnsorted.find("particulasCamina")->second = glm::vec3(jugadorGameObject->ModelMatrix[3]);
 
 	bool statePause;
 	if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS && glfwGetKey(window, GLFW_KEY_P) == GLFW_RELEASE)
@@ -1154,68 +1142,8 @@ void applicationLoop() {
 			shaderTerrain.setVectorFloat3("directionalLight.light.specular", glm::value_ptr(glm::vec3(0.2, 0.2, 0.2)));
 			shaderTerrain.setVectorFloat3("directionalLight.direction", glm::value_ptr(glm::vec3(-0.707106781, -0.707106781, 0.0)));
 
-			/*******************************************
-			 * Propiedades PointLights
-			 *******************************************/
-			shaderMulLighting.setInt("pointLightCount", lamp1Position.size() + lamp2Orientation.size());
-			shaderTerrain.setInt("pointLightCount", lamp1Position.size() + lamp2Orientation.size());
-			for (int i = 0; i < lamp1Position.size(); i++) {
-
-
-
-				Lamparas[i]->ModelMatrix = glm::mat4(1.0f);
-				//glm::mat4 matrixAdjustLamp = glm::mat4(1.0f);
-				Lamparas[i]->ModelMatrix = glm::translate(Lamparas[i]->ModelMatrix, lamp1Position[i]);
-				Lamparas[i]->ModelMatrix = glm::rotate(Lamparas[i]->ModelMatrix, glm::radians(lamp1Orientation[i]), glm::vec3(0, 1, 0));
-				Lamparas[i]->ModelMatrix = glm::scale(Lamparas[i]->ModelMatrix, glm::vec3(0.5, 0.5, 0.5));
-				Lamparas[i]->ModelMatrix = glm::translate(Lamparas[i]->ModelMatrix, glm::vec3(0, 10.3585, 0));
-				glm::vec3 lampPosition = glm::vec3(Lamparas[i]->ModelMatrix[3]);
-				shaderMulLighting.setVectorFloat3("pointLights[" + std::to_string(i) + "].light.ambient", glm::value_ptr(glm::vec3(0.2, 0.16, 0.01)));
-				shaderMulLighting.setVectorFloat3("pointLights[" + std::to_string(i) + "].light.diffuse", glm::value_ptr(glm::vec3(0.4, 0.32, 0.02)));
-				shaderMulLighting.setVectorFloat3("pointLights[" + std::to_string(i) + "].light.specular", glm::value_ptr(glm::vec3(0.6, 0.58, 0.03)));
-				shaderMulLighting.setVectorFloat3("pointLights[" + std::to_string(i) + "].position", glm::value_ptr(lampPosition));
-				shaderMulLighting.setFloat("pointLights[" + std::to_string(i) + "].constant", 1.0);
-				shaderMulLighting.setFloat("pointLights[" + std::to_string(i) + "].linear", 0.09);
-				shaderMulLighting.setFloat("pointLights[" + std::to_string(i) + "].quadratic", 0.01);
-				shaderTerrain.setVectorFloat3("pointLights[" + std::to_string(i) + "].light.ambient", glm::value_ptr(glm::vec3(0.2, 0.16, 0.01)));
-				shaderTerrain.setVectorFloat3("pointLights[" + std::to_string(i) + "].light.diffuse", glm::value_ptr(glm::vec3(0.4, 0.32, 0.02)));
-				shaderTerrain.setVectorFloat3("pointLights[" + std::to_string(i) + "].light.specular", glm::value_ptr(glm::vec3(0.6, 0.58, 0.03)));
-				shaderTerrain.setVectorFloat3("pointLights[" + std::to_string(i) + "].position", glm::value_ptr(lampPosition));
-				shaderTerrain.setFloat("pointLights[" + std::to_string(i) + "].constant", 1.0);
-				shaderTerrain.setFloat("pointLights[" + std::to_string(i) + "].linear", 0.09);
-				shaderTerrain.setFloat("pointLights[" + std::to_string(i) + "].quadratic", 0.02);
-
-
-			}
-			for (int i = 0; i < lamp2Position.size(); i++) {
-
-
-
-				//glm::mat4 matrixAdjustLamp = glm::mat4(1.0f);
-
-				Lamparas2[i]->ModelMatrix = glm::mat4(1.0f);
-				Lamparas2[i]->ModelMatrix = glm::translate(Lamparas2[i]->ModelMatrix, lamp2Position[i]);
-				Lamparas2[i]->ModelMatrix = glm::rotate(Lamparas2[i]->ModelMatrix, glm::radians(lamp2Orientation[i]), glm::vec3(0, 1, 0));
-				Lamparas2[i]->ModelMatrix = glm::scale(Lamparas2[i]->ModelMatrix, glm::vec3(1.0, 1.0, 1.0));
-				Lamparas2[i]->ModelMatrix = glm::translate(Lamparas2[i]->ModelMatrix, glm::vec3(0.759521, 5.00174, 0));
-				glm::vec3 lampPosition = glm::vec3(Lamparas2[i]->ModelMatrix[3]);
-				shaderMulLighting.setVectorFloat3("pointLights[" + std::to_string(lamp1Position.size() + i) + "].light.ambient", glm::value_ptr(glm::vec3(0.2, 0.16, 0.01)));
-				shaderMulLighting.setVectorFloat3("pointLights[" + std::to_string(lamp1Position.size() + i) + "].light.diffuse", glm::value_ptr(glm::vec3(0.4, 0.32, 0.02)));
-				shaderMulLighting.setVectorFloat3("pointLights[" + std::to_string(lamp1Position.size() + i) + "].light.specular", glm::value_ptr(glm::vec3(0.6, 0.58, 0.03)));
-				shaderMulLighting.setVectorFloat3("pointLights[" + std::to_string(lamp1Position.size() + i) + "].position", glm::value_ptr(lampPosition));
-				shaderMulLighting.setFloat("pointLights[" + std::to_string(lamp1Position.size() + i) + "].constant", 1.0);
-				shaderMulLighting.setFloat("pointLights[" + std::to_string(lamp1Position.size() + i) + "].linear", 0.09);
-				shaderMulLighting.setFloat("pointLights[" + std::to_string(lamp1Position.size() + i) + "].quadratic", 0.01);
-				shaderTerrain.setVectorFloat3("pointLights[" + std::to_string(lamp1Position.size() + i) + "].light.ambient", glm::value_ptr(glm::vec3(0.2, 0.16, 0.01)));
-				shaderTerrain.setVectorFloat3("pointLights[" + std::to_string(lamp1Position.size() + i) + "].light.diffuse", glm::value_ptr(glm::vec3(0.4, 0.32, 0.02)));
-				shaderTerrain.setVectorFloat3("pointLights[" + std::to_string(lamp1Position.size() + i) + "].light.specular", glm::value_ptr(glm::vec3(0.6, 0.58, 0.03)));
-				shaderTerrain.setVectorFloat3("pointLights[" + std::to_string(lamp1Position.size() + i) + "].position", glm::value_ptr(lampPosition));
-				shaderTerrain.setFloat("pointLights[" + std::to_string(lamp1Position.size() + i) + "].constant", 1.0);
-				shaderTerrain.setFloat("pointLights[" + std::to_string(lamp1Position.size() + i) + "].linear", 0.09);
-				shaderTerrain.setFloat("pointLights[" + std::to_string(lamp1Position.size() + i) + "].quadratic", 0.02);
-
-
-			}
+			
+			
 
 			/*******************************************
 			 * 1.- We render the depth buffer
@@ -1482,7 +1410,7 @@ void applicationLoop() {
 									collidersOBB.erase(jt->first);
 
 								}
-									
+								
 							}
 
 
@@ -1491,6 +1419,9 @@ void applicationLoop() {
 								//Obtenemos el indice del enemigo por medio del indentificador generado por el collider.
 								std::string strindex = it->first.substr(5, 3);
 								int index = std::stoi(strindex);
+
+
+								blendingUnsorted.find("particulasBlood")->second = glm::vec3(enemyCollection[index]->ModelMatrix[3]);
 
 								//Validar que el indice este dentro del rango de los enemigos. pues esta sección se ejecuta por cada frame que hubo colisión.
 								if (index >= 0 && index < enemyCollection.size()) {
@@ -1502,6 +1433,9 @@ void applicationLoop() {
 									
 								}
 
+
+
+								ZombieBloodBool = true;
 							}
 
 
@@ -1851,23 +1785,10 @@ void generarBala() {
 	bulletCollection.push_back(temp);
 }
 
-void prepareScene() {
-
-	bulletGameObject->ModelMatrix[3] = glm::vec4(midBala, 1.0);
-	bulletGameObject->ModelMatrix = glm::rotate(bulletGameObject->ModelMatrix, glm::radians(90.0f), glm::vec3(1, 0, 0));
-	bulletGameObject->ModelMatrix = glm::scale(bulletGameObject->ModelMatrix, glm::vec3(0.05f, maxDistanceRayBala, 0.05f));
-
-	modelRock.setShader(&shaderMulLighting);
-	terrain.setShader(&shaderTerrain);
-	jugadorGameObject->SetShader(&shaderMulLighting);
-	zombieGameObject->SetShader(&shaderMulLighting);
-
-	for (size_t i = 0; i < enemyCollection.size(); i++)
-	{
-		enemyCollection[i]->SetShader(&shaderMulLighting);
-	}
-	
-}
+void inicializerParticulas(GLuint* initVel, GLuint* startTime, GLuint* VAO, GLuint* numParticulas) {
+	// Generar los buffers para la sangre de zombie
+	glGenBuffers(1, initVel);//Buffer para las velocidades iniciales
+	glGenBuffers(1, startTime);//Buffer para los tiempos iniciales
 
 	// Reservar el espacio para buffers
 	int size = (*numParticulas) * 3 * sizeof(float);
@@ -1876,15 +1797,27 @@ void prepareScene() {
 	glBindBuffer(GL_ARRAY_BUFFER, *startTime);
 	glBufferData(GL_ARRAY_BUFFER, (*numParticulas) * sizeof(float), NULL, GL_STATIC_DRAW);
 
-	modelRock.setShader(&shaderDepth);
-	terrain.setShader(&shaderDepth);
+	// Llena la informacion del buffer de veocidades iniciales
+	glm::vec3 v(0.0f, 0.0f, 0.0f);
+	float velocity, theta, phi;
+	GLfloat* data = new GLfloat[(*numParticulas) * 3];
+	for (unsigned int i = 0; i < (*numParticulas); i++) {
+		theta = glm::mix(0.0f, glm::pi<float>() / 6.0f, ((float)rand() / RAND_MAX));
+		phi = glm::mix(0.0f, glm::two_pi<float>(), ((float)rand() / RAND_MAX));
 
-	jugadorGameObject->SetShader(&shaderDepth);
-	zombieGameObject->SetShader(&shaderDepth);
+		// Ecuacion de una esfera, las velidades se generan de acuerdo a lo esferico
+		/*v.x = sinf(theta) * cosf(phi);
+		v.y = cos(theta);
+		v.z = sinf(theta) * sinf(phi);*/
+		v.x = (float)rand() / RAND_MAX;
+		v.y = cosf(theta) * sinf(phi);
+		v.z = (float)rand() / RAND_MAX;
 
-	for (size_t i = 0; i < enemyCollection.size(); i++)
-	{
-		enemyCollection[i]->SetShader(&shaderDepth);
+		velocity = glm::mix(0.6f, 0.8f, ((float)rand() / RAND_MAX));
+		v = glm::normalize(v) * velocity;
+		data[3 * i] = v.x;
+		data[3 * i + 1] = v.y;
+		data[3 * i + 2] = v.z;
 	}
 	glBindBuffer(GL_ARRAY_BUFFER, *initVel);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
@@ -1899,7 +1832,7 @@ void prepareScene() {
 		time += rate;
 	}
 	glBindBuffer(GL_ARRAY_BUFFER, *startTime);
-	glBufferSubData(GL_ARRAY_BUFFER, 0,( *numParticulas) * sizeof(float), data);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, (*numParticulas) * sizeof(float), data);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	delete[] data;
@@ -1913,6 +1846,85 @@ void prepareScene() {
 	glBindBuffer(GL_ARRAY_BUFFER, *startTime);
 	glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, NULL);
 	glEnableVertexAttribArray(1);
+
+	glBindVertexArray(0);
+}
+
+void renderPaticulas(bool pBool, int contador, int maxContador, double curr, double last, float tAnim, float tPar, float altura,
+	std::map<float, std::pair<std::string, glm::vec3> >::reverse_iterator itera, GLuint* nPar, GLuint* textureID, Shader shader) {
+	contador++;
+	if (contador >= maxContador) {
+		pBool = false;
+		contador = 0;
+	}
+	//Render de particulas de sangre
+	glm::mat4 modelMatrixParticulas = glm::mat4(1.0);
+	modelMatrixParticulas = glm::translate(modelMatrixParticulas, itera->second.second);
+	modelMatrixParticulas[3][1] = terrain.getHeightTerrain(modelMatrixParticulas[3][0],
+		modelMatrixParticulas[3][2]) + altura;//+5.0f es para la altura
+	curr = TimeManager::Instance().GetTime();//currTimeParticulasZombieBlood, lastTimeParticulasZombieBlood
+	if (curr - last > tAnim) {//Tiempo de la animacion
+		last = curr;
+	}
+	glDepthMask(GL_FALSE);
+	glPointSize(10.0f);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, *textureID);
+	shader.turnOn();
+	// Llamando al shader
+	shader.setFloat("Time", float(curr - last));
+	shader.setFloat("ParticleLifetime", tPar);//Este valor es para que duren mas las particulas
+	shader.setInt("ParticleTex", 0);
+	shader.setVectorFloat3("Gravity", glm::value_ptr(glm::vec3(0.0f, 0.1f, 0.0f)));//Este valor es para que vayan hacia arriba las particulas
+	shader.setMatrix4("model", 1, false, glm::value_ptr(modelMatrixParticulas));
+	glBindVertexArray(VAOZB);
+	glDrawArrays(GL_POINTS, 0, *nPar);
+	glDepthMask(GL_TRUE);
+	shader.turnOff();
+}
+
+
+void prepareScene() {
+
+	modelRock.setShader(&shaderMulLighting);
+	terrain.setShader(&shaderTerrain);
+	jugadorGameObject->SetShader(&shaderMulLighting);
+	zombieGameObject->SetShader(&shaderMulLighting);
+
+	for (size_t i = 0; i < enemyCollection.size(); i++)
+	{
+		enemyCollection[i]->SetShader(&shaderMulLighting);
+	}
+
+}
+
+void prepareDepthScene() {
+
+	modelRock.setShader(&shaderDepth);
+	terrain.setShader(&shaderDepth);
+	jugadorGameObject->SetShader(&shaderDepth);
+	zombieGameObject->SetShader(&shaderDepth);
+
+	for (size_t i = 0; i < enemyCollection.size(); i++)
+	{
+		enemyCollection[i]->SetShader(&shaderDepth);
+	}
+
+}
+
+void drawGUIElement(GLuint textureID, glm::vec3 scale, glm::vec3 pos) {
+
+	// Dibujado de una textura sola en pantalla.
+	shaderViewTexture.setMatrix4("view", 1, false, glm::value_ptr(glm::mat4(1.0f)));
+	shaderViewTexture.setMatrix4("projection", 1, false, glm::value_ptr(glm::mat4(1.0f)));
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, textureID);
+	boxRenderImagen.setScale(scale);
+	boxRenderImagen.setPosition(pos);
+	boxRenderImagen.render();
+}
+
 
 void renderScene(bool renderParticles) {
 	/*******************************************
