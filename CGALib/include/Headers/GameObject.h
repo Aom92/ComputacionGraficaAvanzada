@@ -15,6 +15,7 @@ public:
 	glm::mat4 ColliderTransform;
 	std::string nametag;
 	int animationIndex = 0;
+	bool isDeath = false;
 
 	Cylinder cyl = cylConst;
 

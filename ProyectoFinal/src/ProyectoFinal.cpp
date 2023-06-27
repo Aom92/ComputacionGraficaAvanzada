@@ -63,12 +63,13 @@
 #define VELOCIDAD_BALA 1.2f
 #define VELOCIDAD_MOVIMIENTO_PERSONAJE 0.1f
 #define VELOCIDAD_ROTACION_PERSONAJE 0.6f
-#define VELOCIDAD_MOVIMIENTO_ZOMBIE 0.005f
+
 #define GRAVEDAD_SALTO_PERSONAJE 0.5f
-#define NUMERO_ENEMIGOS 3
+#define NUMERO_ENEMIGOS 30
 #define VELOCIDAD_DE_GIRO_PERSONAJE 5.0f
 int TIEMPO_ENTRE_ZOMBIES = 10;
 int vidas = 1000;
+float VELOCIDAD_MOVIMIENTO_ZOMBIE = 0.001f;
 
 // Constantes para la camara
 #define SCREEN_WIDTH 1350
@@ -444,7 +445,7 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	zombieGameObject = new GameObject("Zombie", "../models/Zombie/ZombieAnimated.fbx", &shaderMulLighting);
 
 	// Modelo de juego: Bala.
-	bulletGameObject = new GameObject("Bala", &shader);
+	bulletGameObject = new GameObject("Bala", "../models/bullet/bullet.fbx", &shaderMulLighting);
 
 	// Contenedor de Zombies.
 	for (int i = 0; i < 3; i++) {
@@ -815,7 +816,7 @@ bool processInput(bool continueApplication) {
 
 		//Disparar balas, Boton RB.
 		//Detect Press
-		if(buttons[0] == GLFW_PRESS) {
+		if(buttons[5] == GLFW_PRESS) {
 			btnApress = true;
 		}
 
@@ -1218,7 +1219,7 @@ void applicationLoop() {
 			for (size_t i = 0; i < bulletCollection.size(); i++)
 			{
 
-				bulletCollection[i]->UpdateColliderOBB(0.0f, glm::vec3(1, 0, 0), glm::vec3(0.05, 0.05, 0.05), glm::vec3(1.0));
+				bulletCollection[i]->UpdateColliderOBB(0.0f, glm::vec3(1, 0, 0), glm::vec3(0.5, 0.5, 0.5), glm::vec3(1.0));
 				addOrUpdateColliders(collidersOBB, "bullet" + std::to_string(i), bulletCollection[i]->GetOBB(), bulletCollection[i]->ModelMatrix);
 
 			}
@@ -1337,6 +1338,8 @@ void applicationLoop() {
 
 						if (it->first.find("enemy") == 0 && jt->first.find("bullet") == 0) {
 							
+							
+
 							if (bulletCollection.size() > 0) {
 
 								//Obtenemos el indice de la bala por medio del indentificador generado por el collider.
@@ -1345,14 +1348,35 @@ void applicationLoop() {
 
 								//Validar que el indice este dentro del rango de las balas. pues esta sección se ejecuta por cada frame que hubo colisión.
 								if (index >= 0 && index < bulletCollection.size()) {
-									//Trasladamos a una ubicación lejana para no marcar mas colisiones antes de ser borrado.
-									bulletCollection[index]->ModelMatrix = glm::translate(bulletCollection[index]->ModelMatrix, glm::vec3(0.0f, -100.0f, 0.0f));
-									addOrUpdateColliders(collidersOBB, "bullet" + std::to_string(index), bulletCollection[index]->GetOBB(), bulletCollection[index]->ModelMatrix);
+									
+									//Eliminar la bala de la colección de balas. y su collider
 									bulletCollection.erase(bulletCollection.begin() + index);
+									collidersOBB.erase(jt->first);
 
 								}
 									
 							}
+
+
+							if (enemyCollection.size() > 0) {
+							
+								//Obtenemos el indice del enemigo por medio del indentificador generado por el collider.
+								std::string strindex = it->first.substr(5, 3);
+								int index = std::stoi(strindex);
+
+								//Validar que el indice este dentro del rango de los enemigos. pues esta sección se ejecuta por cada frame que hubo colisión.
+								if (index >= 0 && index < enemyCollection.size()) {
+
+									//Marcar al zombie como muerto y borrar su collider.
+									//enemyCollection.erase(enemyCollection.begin() + index);
+									enemyCollection[index]->isDeath = true;
+									collidersOBB.erase(it->first);
+									
+								}
+
+							}
+
+
 
 						}
 
@@ -1421,7 +1445,8 @@ void applicationLoop() {
 
 						if (itCollision->first.find("bullet") == 0) {
 
-							
+							//Borramos las balas al chocar con cualquier cosa
+							collidersOBB.erase(itCollision->first);
 						}
 
 					}
@@ -1511,6 +1536,12 @@ void applicationLoop() {
 			int seconds = (int)diffTime % 60;
 			snprintf(buff, 100, "Tiempo: %d:%2d:%2d",hours,minutes,seconds);
 
+			//Cada 10 segundos incrementar la velocidad de los zombies.
+			if (seconds % 10 == 0) {
+				VELOCIDAD_MOVIMIENTO_ZOMBIE += 0.0001; //Incrementar levemente la velocidad de los zombies
+			}
+
+
 			if (TIEMPO_ENTRE_ZOMBIES >= 1)
 			{
 				if (seconds % TIEMPO_ENTRE_ZOMBIES == 0) {
@@ -1523,6 +1554,8 @@ void applicationLoop() {
 
 				}
 			}
+
+
 			
 #if _DEBUG_FLAG
 			std::cout << "tiempo entre zombies: " << TIEMPO_ENTRE_ZOMBIES << std::endl;
@@ -1530,6 +1563,10 @@ void applicationLoop() {
 			std::string cadenaTiempo = buff;
 
 			modelText->render((cadenaTiempo), -0.15, 0.8, 1.0, 0.0, 0.0, 42);
+			
+			modelText->render(("Salud: " + std::to_string(vidas)), -0.97, 0.4, 0.01, 0.0, 1.0, 32);
+			
+			
 			glDisable(GL_BLEND);
 
 
@@ -1665,17 +1702,11 @@ void generarZombie() {
 }
 
 void generarBala() {
-	float maxDistanceRayBala = 0.25;
+
 	bulletGameObject->ModelMatrix = glm::mat4(jugadorGameObject->ModelMatrix);
 	bulletGameObject->ModelMatrix = glm::translate(bulletGameObject->ModelMatrix, glm::vec3(0, 1.8, 0.5));
-	glm::vec3 dirBala = bulletGameObject->ModelMatrix[2];
-	glm::vec3 origenBala = bulletGameObject->ModelMatrix[3];
-	glm::vec3 midBala = origenBala + (dirBala * maxDistanceRayBala / 2.0f); //Partiendo de la ecuación canonica de la recta.
-
-	bulletGameObject->ModelMatrix[3] = glm::vec4(midBala, 1.0);
 	bulletGameObject->ModelMatrix = glm::rotate(bulletGameObject->ModelMatrix, glm::radians(90.0f), glm::vec3(1, 0, 0));
-	bulletGameObject->ModelMatrix = glm::scale(bulletGameObject->ModelMatrix, glm::vec3(0.05f, maxDistanceRayBala, 0.05f));
-
+	bulletGameObject->ModelMatrix = glm::scale(bulletGameObject->ModelMatrix, glm::vec3(0.4f, 0.4, 0.4f));
 	GameObject* temp = new GameObject();
 	memcpy(temp, bulletGameObject, sizeof(GameObject));
 
@@ -1860,90 +1891,100 @@ void renderScene(bool renderParticles) {
 	for (size_t i = 0; i < enemyCollection.size(); i++)
 	{
 
-		//Actualizar altura a la del terreno.
-		enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(zombieGameObject->ModelMatrix[3][0], zombieGameObject->ModelMatrix[3][2]);
-		enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][2]);
 
-		//Obtenemos la posici�n del jugador y del zombie
-		glm::vec3 targetPos = glm::vec3(jugadorGameObject->ModelMatrix[3][0], jugadorGameObject->ModelMatrix[3][1], jugadorGameObject->ModelMatrix[3][2]);	
-		glm::vec3 currPos = glm::vec3(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][1], enemyCollection[i]->ModelMatrix[3][2]);
-
-		//Obtenemos la direcci�n hacia el jugador
-		glm::vec3 direction = glm::normalize(targetPos - currPos);
-		glm::vec3 currDirection = glm::normalize(enemyCollection[i]->ModelMatrix[2]);
-		
-			
-		glm::mat4 currentTransform = enemyCollection[i]->ModelMatrix;	//Almacenamos temporalmente la matriz de transformaci�n del zombie para poder rotarla.
-
-
-		float dot = glm::dot(direction, currDirection);			//producto punto para encontrar despues el angulo entre las direcciones.
-		glm::vec3 cross = glm::cross(direction, currDirection); //producto cruz para encontrar la direcci�n de rotaci�n. El vector perdendicular resultante es el eje Y. (UP)
-
-		glm::clamp(dot, -1.0f, 1.0f);
-		float angulo = acos(dot);
-
-		if (direction != currDirection)
+		//Verificar si el zombie esta vivo o no.
+		if (enemyCollection[i]->isDeath)
 		{
-			if (cross.y < 0)
+			enemyCollection[i]->animationIndex = 0;
+			enemyCollection[i]->ModelMatrix = glm::translate(enemyCollection[i]->ModelMatrix, glm::vec3(0, -100, 0));
+		}
+		else {
+
+			//Actualizar altura a la del terreno.
+			enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][2]);
+			enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][2]);
+
+			//Obtenemos la posici�n del jugador y del zombie
+			glm::vec3 targetPos = glm::vec3(jugadorGameObject->ModelMatrix[3][0], jugadorGameObject->ModelMatrix[3][1], jugadorGameObject->ModelMatrix[3][2]);
+			glm::vec3 currPos = glm::vec3(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][1], enemyCollection[i]->ModelMatrix[3][2]);
+
+			//Obtenemos la direcci�n hacia el jugador
+			glm::vec3 direction = glm::normalize(targetPos - currPos);
+			glm::vec3 currDirection = glm::normalize(enemyCollection[i]->ModelMatrix[2]);
+
+
+			glm::mat4 currentTransform = enemyCollection[i]->ModelMatrix;	//Almacenamos temporalmente la matriz de transformaci�n del zombie para poder rotarla.
+
+
+			float dot = glm::dot(direction, currDirection);			//producto punto para encontrar despues el angulo entre las direcciones.
+			glm::vec3 cross = glm::cross(direction, currDirection); //producto cruz para encontrar la direcci�n de rotaci�n. El vector perdendicular resultante es el eje Y. (UP)
+
+			glm::clamp(dot, -1.0f, 1.0f);
+			float angulo = acos(dot);
+
+			if (direction != currDirection)
+			{
+				if (cross.y < 0)
 					enemyCollection[i]->ModelMatrix = glm::rotate(currentTransform, glm::radians(angulo), glm::vec3(0, 1, 0));
-			if (cross.y > 0)		
+				if (cross.y > 0)
 					enemyCollection[i]->ModelMatrix = glm::rotate(currentTransform, glm::radians(-angulo), glm::vec3(0, 1, 0));
+			}
+			else
+			{
+				enemyCollection[i]->ModelMatrix = glm::rotate(currentTransform, glm::radians(0.0f), glm::vec3(0, 1, 0));
+			}
+
+
+			glm::vec3 goal = (enemyCollection[i]->ModelMatrix[2]);
+			enemyCollection[i]->ModelMatrix = glm::translate(enemyCollection[i]->ModelMatrix, -currDirection * VELOCIDAD_MOVIMIENTO_ZOMBIE);
+			enemyCollection[i]->animationIndex = 1;
 		}
-		else
+
+
+		int seconds = (int)diffTime % 60;
+		//Revisar cada 4 segundos si la animacion de muerte termino para borrar al zombi
+		if (enemyCollection[i]->isDeath && enemyCollection[i]->animationIndex == 0)
 		{
-			enemyCollection[i]->ModelMatrix = glm::rotate(currentTransform, glm::radians(0.0f), glm::vec3(0, 1, 0));
+			if( seconds % 4 == 0)
+				enemyCollection.erase(enemyCollection.begin() + i);
 		}
 
 
-
-		/*if (i == 0) {
-			std::cout << "Angulo: " << glm::degrees(angulo) << "  crozz.y : " << cross.y << std::endl;
-			
-		}*/
-		glm::vec3 goal = (enemyCollection[i]->ModelMatrix[2]);
-		enemyCollection[i]->ModelMatrix = glm::translate(enemyCollection[i]->ModelMatrix,  -currDirection * VELOCIDAD_MOVIMIENTO_ZOMBIE);
-			
-
-		//
-		//////Obtener el angulo entre el zombie y el jugador.
-		////float angle = glm::atan(z, x);
-		////float dangle = glm::degrees(angle)  ;
-
-		////
 		
-		////
-
-		////Aplicar rotaci�n al zombie
-		//enemyCollection[i]->ModelMatrix[0][0] = glm::cos(glm::radians(dangle));
-		//enemyCollection[i]->ModelMatrix[0][2] = glm::sin(glm::radians(dangle));
-		//enemyCollection[i]->ModelMatrix[2][0] = -glm::sin(	glm::radians(dangle));
-		//enemyCollection[i]->ModelMatrix[2][2] = glm::cos(glm::radians(dangle));
-		//
-
-		//if (dangle > 0)
-		//	enemyCollection[i]->Rotate(180.0f, glm::vec3(0, 1, 0));
-		//else
-		//	enemyCollection[i]->Rotate(-90.0f, glm::vec3(0, 1, 0));
-
-
-		enemyCollection[i]->animationIndex = 1;
 		enemyCollection[i]->Transform = glm::mat4(enemyCollection[i]->ModelMatrix);
 		enemyCollection[i]->SetScale(glm::vec3(0.00015, 0.00015, 0.00015));
 		enemyCollection[i]->Draw();
 	}
 
 	// LOGICA DE LA BALA.
-	float maxDistanceRayBala = 0.25;
+	float maxDistanceBala = 27;
 
 	if(!bulletCollection.empty() )
 		for (size_t i = 0; i < bulletCollection.size(); i++)
 		{
-			glm::vec3 currDirection = glm::normalize(bulletCollection[i]->ModelMatrix[2]);
-			bulletCollection[i]->ModelMatrix = glm::translate(bulletCollection[i]->ModelMatrix, -currDirection * VELOCIDAD_BALA);
+
+			//Calcular distancia entre bala y jugador
+			glm::vec3 targetPos = glm::vec3(jugadorGameObject->ModelMatrix[3][0], jugadorGameObject->ModelMatrix[3][1], jugadorGameObject->ModelMatrix[3][2]);
+			glm::vec3 currPos = glm::vec3(bulletCollection[i]->ModelMatrix[3][0], bulletCollection[i]->ModelMatrix[3][1], bulletCollection[i]->ModelMatrix[3][2]);
+			float distance = glm::distance(targetPos, currPos);
 
 
-			bulletCollection[i]->DrawCyl(bulletCollection[i]->ModelMatrix);
+			if (distance > maxDistanceBala)
+			{
+				bulletCollection[i]->ModelMatrix = glm::translate(bulletCollection[i]->ModelMatrix, glm::vec3(1000.0f, -1000.0f, -1000.0f)); //Mover al piso para no dejar el collider.
+				bulletCollection[i]->UpdateColliderOBB(0.0f, glm::vec3(1, 0, 0), glm::vec3(0.05, 0.05, 0.05), glm::vec3(1.0));
+				addOrUpdateColliders(collidersOBB, "bullet" + std::to_string(i), bulletCollection[i]->GetOBB(), glm::mat4(0.0f));
+				collidersOBB.erase("bullet"+ std::to_string(i)); //Eliminar el collider de la bala.
 
+
+				bulletCollection.erase(bulletCollection.begin() + i);
+			}
+			else {
+				glm::vec3 currDirection = glm::normalize(bulletCollection[i]->ModelMatrix[2]);
+				bulletCollection[i]->ModelMatrix = glm::translate(bulletCollection[i]->ModelMatrix, -currDirection * VELOCIDAD_BALA);
+				bulletCollection[i]->Transform = glm::mat4(bulletCollection[i]->ModelMatrix);
+				bulletCollection[i]->Draw();
+			}
 		}
 
 
