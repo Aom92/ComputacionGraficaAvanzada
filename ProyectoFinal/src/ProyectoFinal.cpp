@@ -957,24 +957,8 @@ void applicationLoop() {
 	//Initial Positions???
 	matrixModelRock = glm::translate(matrixModelRock, glm::vec3(-3.0, 0.0, 2.0));
 	jugadorGameObject->ModelMatrix = glm::translate(jugadorGameObject->ModelMatrix, glm::vec3(3.0, 0.0, 2.0));
-	mayowGameObject->ModelMatrix = glm::translate(mayowGameObject->ModelMatrix, glm::vec3(13.0f, 0.05f, -5.0f));
-	mayowGameObject->ModelMatrix = glm::rotate(mayowGameObject->ModelMatrix, glm::radians(-90.0f), glm::vec3(0, 1, 0));
 	zombieGameObject->ModelMatrix = glm::translate(zombieGameObject->ModelMatrix, glm::vec3(5.0, 0.0, 2.0));
 	
-	for (int i = 0; i < lamp1Position.size(); i++) {
-
-		GameObject* lamp = new GameObject("Light", "../models/Street-Lamp-Black/objLamp.obj", &shaderMulLighting);
-
-		Lamparas.push_back(lamp);
-	}
-
-	for (int i = 0; i < lamp2Position.size(); i++) {
-
-		GameObject* lamp = new GameObject("light2", "../models/Street_Light/Lamp.obj", &shaderMulLighting);
-		GameObject* post = new GameObject("Post2", "../models/Street_Light/LampPost.obj", &shaderMulLighting);
-		Lamparas2.push_back(lamp);
-	}
-
 	lastTime = TimeManager::Instance().GetTime();
 
 	//Setting up Initial camera Angle and position.
