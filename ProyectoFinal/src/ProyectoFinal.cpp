@@ -98,6 +98,11 @@ Shader shaderDepth;
 ShadowBox* shadowBox;
 // Shader para dibujar la interfaz grafica
 Shader shaderViewTexture;
+// Shader para el sistema de particulas de zombies
+Shader shaderZombieBlood;
+// Shader para el sistema de particulas del jugador cuando camina
+Shader shaderJugadorCamina;
+
 // CAMARA:
 std::shared_ptr<Camera> camera(new ThirdPersonCamera());
 float distanceFromTarget = 7.0;
@@ -162,6 +167,7 @@ GLuint skyboxTextureID;
 
 // UI textures:
 GLuint textureHealthBarID, scoreTextureID, texturePauseMenuID, textureGameOverID, textureItemContainer, textureTitleMenuID;
+GLuint textureParticleZombieBloodID, textureParticleJugadorCaminaID;
 
 FontTypeRendering::FontTypeRendering* modelText;
 
@@ -245,8 +251,26 @@ std::vector<glm::vec3> lamp2Position = { glm::vec3(-36.52, 0, -23.24),
 		glm::vec3(-52.73, 0, -3.90) };
 std::vector<float> lamp2Orientation = { 21.37 + 90, -65.0 + 90 };
 
+// Blending model unsorted
+std::map<std::string, glm::vec3> blendingUnsorted = {
+	{"particulasBlood", glm::vec3(0.0)},
+	{"particulasCamina", glm::vec3(0.0)}
+};
+
 double deltaTime, diffTime;
 double currTime, lastTime, startupTimer;
+
+// Variables para el sistema de particulas de la sangre Zombie
+GLuint initVelZB, startTimeZB, VAOZB, numParticulasZB = 20000;
+double currTimeParticulasZombieBlood, lastTimeParticulasZombieBlood;
+bool ZombieBloodBool = false;
+int cTimeParticlesZombie = 0;
+
+// Variables para el sistema de particulas de la sangre Zombie
+GLuint initVelJC, startTimeJC, VAOJC, numParticulasJC = 10000;
+double currTimeParticulasJugadorCamina, lastTimeParticulasJugadorCamina;
+bool JugadorCaminaBool = false;
+int cTimeParticlesJugadorCamina = 0;
 
 // Colliders
 std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4> > collidersOBB;
@@ -314,6 +338,12 @@ void checkCollisionsDisparo();
 void generarZombie();
 void generarBala();
 void resetGame();
+
+void inicializerParticulas(GLuint* initVel, GLuint* startTime, GLuint* VAO, GLuint* numParticulas);
+void inicializerParticulasZB();
+void inicializerParticulasJC();
+void renderPaticulas(bool pBool, int contador, int maxContador, double curr, double last, float tAnim, float tPar, float altura,
+	std::map<float, std::pair<std::string, glm::vec3> >::reverse_iterator itera, GLuint* nPar, GLuint* textureID, Shader shader);
 
 void drawGUIElement(GLuint textureID, glm::vec3 scale, glm::vec3 pos);
 void startScene(std::string sceneName);
@@ -383,6 +413,8 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	shaderTerrain.initialize("../Shaders/terrain_shadow.vs", "../Shaders/terrain_shadow.fs");
 	shaderDepth.initialize("../Shaders/shadow_mapping_depth.vs", "../Shaders/shadow_mapping_depth.fs");
 	shaderViewTexture.initialize("../Shaders/texturizado.vs", "../Shaders/texturizado.fs");
+	shaderZombieBlood.initialize("../Shaders/particlesBlood.vs", "../Shaders/particlesBlood.fs");
+	shaderJugadorCamina.initialize("../Shaders/particlesCamina.vs", "../Shaders/particlesCamina.fs");
 
 	// Inicializacion de los objetos.
 
@@ -518,6 +550,16 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	loadTexture("../Textures/UI/gameOver.png", &textureGameOverID);
 	loadTexture("../Textures/UI/container.png", &textureItemContainer);
 	loadTexture("../Textures/UI/title.png", &textureTitleMenuID);
+	// **************************************************
+	//						PARTICULAS:
+	//					Zombies, jugador
+	/// -------------------------------------------------
+	loadTexture("../Textures/Blood-1.png", &textureParticleZombieBloodID);
+	inicializerParticulas(&initVelZB, &startTimeZB, &VAOZB, &numParticulasZB);
+	//inicializerParticulasZB();
+	loadTexture("../Textures/fire.png", &textureParticleJugadorCaminaID);
+	inicializerParticulas(&initVelJC, &startTimeJC, &VAOJC, &numParticulasJC);
+	//inicializerParticulasJC();
 
 	/*******************************************
 	 * Inicializacion del framebuffer para
@@ -655,6 +697,8 @@ void destroy() {
 	shaderMulLighting.destroy();
 	shaderSkybox.destroy();
 	shaderTerrain.destroy();
+	shaderZombieBlood.destroy();
+	shaderJugadorCamina.destroy();
 
 	// Basic objects Delete
 	skyboxSphere.destroy();
@@ -694,10 +738,26 @@ void destroy() {
 	glDeleteTextures(1, &textureTerrainGID);
 	glDeleteTextures(1, &textureTerrainBID);
 	glDeleteTextures(1, &textureTerrainBlendMapID);
+	glDeleteTextures(1, &textureParticleZombieBloodID);
+	glDeleteTextures(1, &textureParticleJugadorCaminaID);
 
 	// Cube Maps Delete
 	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 	glDeleteTextures(1, &skyboxTextureID);
+
+	// Eliminar el buffer del sistema de particulas Zombie Blood
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glDeleteBuffers(1, &initVelZB);
+	glDeleteBuffers(1, &startTimeZB);
+	glBindVertexArray(0);
+	glDeleteVertexArrays(1, &VAOZB);
+
+	// Eliminar el buffer del sistema de particulas Zombie Blood
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glDeleteBuffers(1, &initVelJC);
+	glDeleteBuffers(1, &startTimeJC);
+	glBindVertexArray(0);
+	glDeleteVertexArrays(1, &VAOJC);
 }
 
 void reshapeCallback(GLFWwindow* Window, int widthRes, int heightRes) {
@@ -886,6 +946,7 @@ bool processInput(bool continueApplication) {
 		jugadorGameObject->ModelMatrix = glm::rotate(jugadorGameObject->ModelMatrix, glm::radians(VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
 		animationIndex = 0;
 		animationIndexPlayer = 2;
+		JugadorCaminaBool = true;
 	}
 	else if ( glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
 	
@@ -898,11 +959,13 @@ bool processInput(bool continueApplication) {
 		jugadorGameObject->ModelMatrix = glm::translate(jugadorGameObject->ModelMatrix, glm::vec3(0, 0, VELOCIDAD_MOVIMIENTO_PERSONAJE));
 		animationIndex = 0;
 		animationIndexPlayer = 2;
+		JugadorCaminaBool = true;
 	}
 	else if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
 		jugadorGameObject->ModelMatrix = glm::translate(jugadorGameObject->ModelMatrix, glm::vec3(0, 0, -VELOCIDAD_MOVIMIENTO_PERSONAJE));
 		animationIndex = 0;
 		animationIndexPlayer = 2;
+		JugadorCaminaBool = true;
 	}
 	// Disparar bala
 	else if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS && glfwGetKey(window, GLFW_KEY_B) == GLFW_RELEASE  ) {
@@ -1052,6 +1115,12 @@ void applicationLoop() {
 				glm::value_ptr(view));
 			shaderTerrain.setMatrix4("lightSpaceMatrix", 1, false,
 				glm::value_ptr(lightSpaceMatrix));
+			// Settea la matriz de vista y projection al shader de particulas de Zombie blood
+			shaderZombieBlood.setMatrix4("projection", 1, false, glm::value_ptr(projection));
+			shaderZombieBlood.setMatrix4("view", 1, false, glm::value_ptr(view));
+			// Settea la matriz de vista y projection al shader de particulas de Jugador caminando
+			shaderJugadorCamina.setMatrix4("projection", 1, false, glm::value_ptr(projection));
+			shaderJugadorCamina.setMatrix4("view", 1, false, glm::value_ptr(view));
 
 		/*******************************************
 		 * Propiedades Neblina
@@ -1191,9 +1260,97 @@ void applicationLoop() {
 			glCullFace(oldCullFaceMode);
 			glDepthFunc(oldDepthFuncMode);
 			/*******************************************
+			 * Update the position with alpha objects
+			 *******************************************/
+			//blendingUnsorted.find("particulasBlood")->second = glm::vec3(enemyCollection[0]->ModelMatrix[3]);
+			//blendingUnsorted.find("particulasCamina")->second = glm::vec3(jugadorGameObject->ModelMatrix[3]);
+			/*******************************************
 			* Render the Scene Elements
 			*******************************************/
 			renderScene(true);
+
+			/**********
+			* Sorter with alpha objects
+			*/
+			std::map<float, std::pair<std::string, glm::vec3>> blendingSorted;
+			std::map<std::string, glm::vec3>::iterator itblend;
+			for (itblend = blendingUnsorted.begin(); itblend != blendingUnsorted.end(); itblend++) {
+				float distanceFromView = glm::length(camera->getPosition() - itblend->second);
+				blendingSorted[distanceFromView] = std::make_pair(itblend->first, itblend->second);
+			}
+
+			/**********
+		 * Render de las transparencias
+		 */
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			glDisable(GL_CULL_FACE);
+			for (std::map<float, std::pair<std::string, glm::vec3> >::reverse_iterator it = blendingSorted.rbegin(); it != blendingSorted.rend(); it++) {
+				if ((it->second.first.compare("particulasBlood") == 0) && ZombieBloodBool) {
+					cTimeParticlesZombie++;
+					if (cTimeParticlesZombie >= 30) {
+						ZombieBloodBool = false;
+						cTimeParticlesZombie = 0;
+					}
+					//Render de particulas de sangre
+					glm::mat4 modelMatrixParticulasBlood = glm::mat4(1.0);
+					modelMatrixParticulasBlood = glm::translate(modelMatrixParticulasBlood, it->second.second);
+					modelMatrixParticulasBlood[3][1] = terrain.getHeightTerrain(modelMatrixParticulasBlood[3][0],
+						modelMatrixParticulasBlood[3][2]) + 2.0f;//+5.0f es para la altura
+					currTimeParticulasZombieBlood = TimeManager::Instance().GetTime();//currTimeParticulasZombieBlood, lastTimeParticulasZombieBlood
+					if (currTimeParticulasZombieBlood - lastTimeParticulasZombieBlood > 1.5) {//Tiempo de la animacion
+						lastTimeParticulasZombieBlood = currTimeParticulasZombieBlood;
+					}
+					glDepthMask(GL_FALSE);
+					glPointSize(10.0f);
+					glActiveTexture(GL_TEXTURE0);
+					glBindTexture(GL_TEXTURE_2D, textureParticleZombieBloodID);
+					shaderZombieBlood.turnOn();
+					// Llamando al shader
+					shaderZombieBlood.setFloat("Time", float(currTimeParticulasZombieBlood - lastTimeParticulasZombieBlood));
+					shaderZombieBlood.setFloat("ParticleLifetime", 1.25f);//Este valor es para que duren mas las particulas
+					shaderZombieBlood.setInt("ParticleTex", 0);
+					shaderZombieBlood.setVectorFloat3("Gravity", glm::value_ptr(glm::vec3(0.0f, 0.1f, 0.0f)));//Este valor es para que vayan hacia arriba las particulas
+					shaderZombieBlood.setMatrix4("model", 1, false, glm::value_ptr(modelMatrixParticulasBlood));
+					glBindVertexArray(VAOZB);
+					glDrawArrays(GL_POINTS, 0, numParticulasZB);
+					glDepthMask(GL_TRUE);
+					shaderZombieBlood.turnOff();
+				}
+				else if ((it->second.first.compare("particulasCamina") == 0) && JugadorCaminaBool) {
+					cTimeParticlesJugadorCamina++;
+					if (cTimeParticlesJugadorCamina >= 30) {
+						ZombieBloodBool = false;
+						cTimeParticlesJugadorCamina = 0;
+					}
+					//Render de particulas de sangre
+					glm::mat4 modelMatrixParticulasCamina = glm::mat4(1.0);
+					modelMatrixParticulasCamina = glm::translate(modelMatrixParticulasCamina, it->second.second);
+					modelMatrixParticulasCamina[3][1] = terrain.getHeightTerrain(modelMatrixParticulasCamina[3][0],
+						modelMatrixParticulasCamina[3][2]) + 0.0f;//+5.0f es para la altura
+					currTimeParticulasJugadorCamina = TimeManager::Instance().GetTime();//currTimeParticulasZombieBlood, lastTimeParticulasZombieBlood
+					if (currTimeParticulasJugadorCamina - lastTimeParticulasJugadorCamina > 1.5) {//Tiempo de la animacion
+						lastTimeParticulasJugadorCamina = currTimeParticulasJugadorCamina;
+						std::cout << "Aqui entra 1 " << std::endl;
+					}
+					glDepthMask(GL_FALSE);
+					glPointSize(10.0f);
+					glActiveTexture(GL_TEXTURE0);
+					glBindTexture(GL_TEXTURE_2D, textureParticleJugadorCaminaID);
+					shaderJugadorCamina.turnOn();
+					// Llamando al shader
+					shaderJugadorCamina.setFloat("Time", float(currTimeParticulasJugadorCamina - lastTimeParticulasJugadorCamina));
+					shaderJugadorCamina.setFloat("ParticleLifetime", 1.25f);//Este valor es para que duren mas las particulas
+					shaderJugadorCamina.setInt("ParticleTex", 0);
+					shaderJugadorCamina.setVectorFloat3("Gravity", glm::value_ptr(glm::vec3(0.0f, 0.1f, 0.0f)));//Este valor es para que vayan hacia arriba las particulas
+					shaderJugadorCamina.setMatrix4("model", 1, false, glm::value_ptr(modelMatrixParticulasCamina));
+					glBindVertexArray(VAOZB);
+					glDrawArrays(GL_POINTS, 0, numParticulasJC);
+					glDepthMask(GL_TRUE);
+					shaderJugadorCamina.turnOff();
+				}
+			}
+			glEnable(GL_CULL_FACE);
 
 			/*******************************************
 			 * Creacion de colliders
@@ -1286,6 +1443,7 @@ void applicationLoop() {
 			for (std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4>>::iterator it = collidersOBB.begin(); it != collidersOBB.end(); it++)
 			{
 				bool isCollision = false;
+				//ZombieBlood = false;
 				for (std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4>>::iterator jt = collidersOBB.begin(); jt != collidersOBB.end(); jt++)
 				{
 
@@ -1695,7 +1853,9 @@ void generarBala() {
 
 void prepareScene() {
 
-	// Set Shaders for first pass
+	bulletGameObject->ModelMatrix[3] = glm::vec4(midBala, 1.0);
+	bulletGameObject->ModelMatrix = glm::rotate(bulletGameObject->ModelMatrix, glm::radians(90.0f), glm::vec3(1, 0, 0));
+	bulletGameObject->ModelMatrix = glm::scale(bulletGameObject->ModelMatrix, glm::vec3(0.05f, maxDistanceRayBala, 0.05f));
 
 	modelRock.setShader(&shaderMulLighting);
 	terrain.setShader(&shaderTerrain);
@@ -1709,7 +1869,12 @@ void prepareScene() {
 	
 }
 
-void prepareDepthScene() {
+	// Reservar el espacio para buffers
+	int size = (*numParticulas) * 3 * sizeof(float);
+	glBindBuffer(GL_ARRAY_BUFFER, *initVel);
+	glBufferData(GL_ARRAY_BUFFER, size, NULL, GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, *startTime);
+	glBufferData(GL_ARRAY_BUFFER, (*numParticulas) * sizeof(float), NULL, GL_STATIC_DRAW);
 
 	modelRock.setShader(&shaderDepth);
 	terrain.setShader(&shaderDepth);
@@ -1721,22 +1886,33 @@ void prepareDepthScene() {
 	{
 		enemyCollection[i]->SetShader(&shaderDepth);
 	}
+	glBindBuffer(GL_ARRAY_BUFFER, *initVel);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
 
-	
-}
+	// Llenar la infomación del tiempo de inicio
+	delete[] data;
+	data = new GLfloat[*numParticulas];
+	float time = 0.0;
+	float rate = 0.00075f;
+	for (unsigned int i = 0; i < (*numParticulas); i++) {
+		data[i] = time;//time es el tiempo de "nacido" que tiene una partícula
+		time += rate;
+	}
+	glBindBuffer(GL_ARRAY_BUFFER, *startTime);
+	glBufferSubData(GL_ARRAY_BUFFER, 0,( *numParticulas) * sizeof(float), data);
 
-void drawGUIElement(GLuint textureID, glm::vec3 scale, glm::vec3 pos) {
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	delete[] data;
 
-	// Dibujado de una textura sola en pantalla.
-	shaderViewTexture.setMatrix4("view", 1, false, glm::value_ptr(glm::mat4(1.0f)));
-	shaderViewTexture.setMatrix4("projection", 1, false, glm::value_ptr(glm::mat4(1.0f)));
+	glGenVertexArrays(1, VAO);//Se pasa como referencia para poder modificarlo
+	glBindVertexArray(*VAO);
+	glBindBuffer(GL_ARRAY_BUFFER, *initVel);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);//DESPUES DE CUANTOS DATOS ESTÁ EL SIGUIENTE->penúltimo argumento
+	glEnableVertexAttribArray(0);
 
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, textureID);
-	boxRenderImagen.setScale(scale);
-	boxRenderImagen.setPosition(pos);
-	boxRenderImagen.render();
-}
+	glBindBuffer(GL_ARRAY_BUFFER, *startTime);
+	glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 0, NULL);
+	glEnableVertexAttribArray(1);
 
 void renderScene(bool renderParticles) {
 	/*******************************************
