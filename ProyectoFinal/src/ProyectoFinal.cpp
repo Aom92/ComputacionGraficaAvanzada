@@ -1069,6 +1069,20 @@ void applicationLoop() {
 			shaderTerrain.setMatrix4("lightSpaceMatrix", 1, false,
 				glm::value_ptr(lightSpaceMatrix));
 
+		/*******************************************
+		 * Propiedades Neblina
+		 *******************************************/
+		shaderMulLighting.setVectorFloat3("fogColor", glm::value_ptr(glm::vec3(0.5, 0.5, 0.4)));
+		shaderMulLighting.setFloat("density", 0.01);
+		shaderMulLighting.setFloat("gradient", 0.33);
+
+		shaderTerrain.setVectorFloat3("fogColor", glm::value_ptr(glm::vec3(0.5, 0.5, 0.4)));
+		shaderTerrain.setFloat("density", 0.01);
+		shaderTerrain.setFloat("gradient", 0.33);
+
+		shaderSkybox.setVectorFloat3("fogColor", glm::value_ptr(glm::vec3(0.5, 0.5, 0.4)));
+
+
 			/*******************************************
 			 * Propiedades Luz direccional
 			 *******************************************/
@@ -1430,6 +1444,7 @@ void applicationLoop() {
 
 			}
 
+
 			//Generacion de un rayo
 			glm::mat4 modelMatrixRayMay = glm::mat4(mayowGameObject->ModelMatrix);
 			modelMatrixRayMay = glm::translate(modelMatrixRayMay, glm::vec3(0, 1, 0)); //Trasladmos un poco para no quedar a la altura del pie
@@ -1443,7 +1458,7 @@ void applicationLoop() {
 			modelMatrixRayMay = glm::rotate(modelMatrixRayMay, glm::radians(90.0f), glm::vec3(1, 0, 0));
 			modelMatrixRayMay = glm::scale(modelMatrixRayMay, glm::vec3(0.05f, maxDistanceRay, 0.05f));
 
-			RayModel.render(modelMatrixRayMay);
+			//RayModel.render(modelMatrixRayMay);
 
 			//Rayo por modelos
 			for (size_t i = 0; i < enemyCollection.size(); i++)
@@ -1461,7 +1476,7 @@ void applicationLoop() {
 				modelMatrixRayEnemy = glm::rotate(modelMatrixRayEnemy, glm::radians(90.0f), glm::vec3(1, 0, 0));
 				modelMatrixRayEnemy = glm::scale(modelMatrixRayEnemy, glm::vec3(0.05f, maxDistanceRay, 0.05f));
 				//modelMatrixRayEnemy = glm::rotate(modelMatrixRayEnemy, glm::radians(90.0f), glm::vec3(0, 0, 1));
-				RayModel.render(modelMatrixRayEnemy);
+				//RayModel.render(modelMatrixRayEnemy);
 			}
 
 			//Realizar la colision rayo contra esfera. 
