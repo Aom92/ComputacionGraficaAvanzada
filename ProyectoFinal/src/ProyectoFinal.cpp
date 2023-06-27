@@ -595,7 +595,7 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	alSourcefv(source[1], AL_POSITION, GunPos);
 	alSourcefv(source[1], AL_VELOCITY, GunVel);
 	alSourcei( source[1], AL_BUFFER, buffer[1]);
-	alSourcei( source[1], AL_LOOPING, AL_TRUE);
+	alSourcei( source[1], AL_LOOPING, AL_FALSE);
 	alSourcef( source[1], AL_MAX_DISTANCE, 2000);
 
 	startupTimer = TimeManager::Instance().GetTime();
@@ -1237,6 +1237,8 @@ void applicationLoop() {
 			/*******************************************
 			 * Render de colliders
 			 *******************************************/
+
+#if _DEBUG_FLAG
 			for (std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4> >::iterator it =
 				collidersOBB.begin(); it != collidersOBB.end(); it++) {
 				glm::mat4 matrixCollider = glm::mat4(1.0);
@@ -1257,7 +1259,7 @@ void applicationLoop() {
 				sphereCollider.enableWireMode();
 				sphereCollider.render(matrixCollider);
 			}
-
+#endif
 
 			/*******************************************
 			 * Test Colisions
@@ -1271,8 +1273,9 @@ void applicationLoop() {
 					bool isCollision = false;
 					if (it != jt && testSphereSphereIntersection(
 						std::get<0>(it->second), std::get<0>(jt->second))) {
-
+#if _DEBUG_FLAG
 						std::cout << "Hay colision entre: " << it->first << " y el modelo: " << jt->first << std::endl;
+#endif																		
 						isCollision = true;
 
 
@@ -1292,8 +1295,9 @@ void applicationLoop() {
 						std::get<0>(it->second), std::get<0>(jt->second))) {
 
 						//TODO: add debug flags
-
+#if _DEBUG_FLAG
 						std::cout << "Hay colision entre: " << it->first << " y el modelo: " << jt->first << std::endl;
+#endif
 						isCollision = true;
 
 						//Colision enemygo con jugador hiere al jugador.
@@ -1361,7 +1365,9 @@ void applicationLoop() {
 				for (std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4>>::iterator jt = collidersOBB.begin(); jt != collidersOBB.end(); jt++)
 				{
 					if (testSphereOBox(std::get<0>(it->second), std::get<0>(jt->second))) {
+#if _DEBUG_FLAG
 						std::cout << " Hay colision del " << it->first << " y el modelo: " << jt->first << std::endl;
+#endif						
 						isCollision = true;
 						addOrUpdateCollisionDetection(collisionDetection, jt->first, true);
 					}
@@ -1464,7 +1470,9 @@ void applicationLoop() {
 			{
 				float tRint;
 				if (raySphereIntersect(origen, targetRay, rayDirection, std::get<0>(itSBB->second), tRint)) {
+#if _DEBUG_FLAG
 					std::cout << "Colision del rayo con el modelo" << itSBB->first << std::endl;
+#endif
 				}
 			}
 
@@ -1473,7 +1481,9 @@ void applicationLoop() {
 			for (itOBB = collidersOBB.begin(); itOBB != collidersOBB.end(); itOBB++)
 			{
 				if (testRayOBB(origen, targetRay, std::get<0>(itOBB->second))) {
+#if _DEBUG_FLAG
 					std::cout << "Colision del rayo con el modelo" << itOBB->first << std::endl;
+#endif
 				}
 			}
 
@@ -1809,10 +1819,7 @@ void renderScene(bool renderParticles) {
 		}
 		else {
 
-			//Actualizar altura a la del terreno.
-			enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][2]);
-			enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][2]);
-
+			
 			//Obtenemos la posici�n del jugador y del zombie
 			glm::vec3 targetPos = glm::vec3(jugadorGameObject->ModelMatrix[3][0], jugadorGameObject->ModelMatrix[3][1], jugadorGameObject->ModelMatrix[3][2]);
 			glm::vec3 currPos = glm::vec3(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][1], enemyCollection[i]->ModelMatrix[3][2]);
@@ -1858,6 +1865,9 @@ void renderScene(bool renderParticles) {
 				enemyCollection.erase(enemyCollection.begin() + i);
 		}
 
+		//Actualizar altura a la del terreno.
+		enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][2]);
+		enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][2]);
 
 		
 		enemyCollection[i]->Transform = glm::mat4(enemyCollection[i]->ModelMatrix);
