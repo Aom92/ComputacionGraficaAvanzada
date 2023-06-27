@@ -1517,8 +1517,7 @@ void applicationLoop() {
 			*******************************************/
 
 			drawGUIElement(textureHealthBarID, glm::vec3(0.08f, 0.15f, 0.15f), glm::vec3(-0.925f, 0.75f, 0.0f));
-			drawGUIElement(textureItemContainer, glm::vec3(0.08f, 0.15f, 0.15f), glm::vec3(-0.825f, 0.75f, 0.0f));
-
+			
 
 			glEnable(GL_BLEND);
 			
