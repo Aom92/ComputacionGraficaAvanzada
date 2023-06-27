@@ -1,5 +1,6 @@
 #define _USE_MATH_DEFINES
 #define _DEBUG_FLAG 0
+#define _DEBUG_CAMERA 0
 #include <cmath>
 //glew include
 #include <GL/glew.h>
@@ -65,6 +66,7 @@
 #define VELOCIDAD_MOVIMIENTO_ZOMBIE 0.005f
 #define GRAVEDAD_SALTO_PERSONAJE 0.5f
 #define NUMERO_ENEMIGOS 3
+#define VELOCIDAD_DE_GIRO_PERSONAJE 5.0f
 int TIEMPO_ENTRE_ZOMBIES = 10;
 int vidas = 1000;
 
@@ -758,6 +760,8 @@ bool processInput(bool continueApplication) {
 		int axisCount = 0, buttonCount = 0;
 		const float* axes = glfwGetJoystickAxes(GLFW_JOYSTICK_1, &axisCount);
 		const unsigned char* buttons = glfwGetJoystickButtons(GLFW_JOYSTICK_1, &buttonCount);
+
+
 #if _DEBUG_FLAG
 		std::cout << "Existen:  " << axisCount << " ejes detectados. " << std::endl;
 		std::cout << "Stick izquierdo horizontal " << axes[0] << std::endl;
@@ -773,59 +777,50 @@ bool processInput(bool continueApplication) {
 		std::cout << "Existen:  " << buttonCount << " botones detectados. " << std::endl;
 #endif
 		
-		
-		
-
 		//Mover al personaje Stick izquierdo
-		if (abs(axes[0]) >= 0.3 || abs(axes[1] >= 0.3) ) {
-			jugadorGameObject->ModelMatrix[3][0] += axes[0] * VELOCIDAD_MOVIMIENTO_PERSONAJE;
+		if (abs(axes[0]) >= 0.1 || abs(axes[1] >= 0.1) ) {
+			jugadorGameObject->ModelMatrix[3][0] += -axes[0] * VELOCIDAD_MOVIMIENTO_PERSONAJE;
 			jugadorGameObject->ModelMatrix[3][2] += axes[1] * VELOCIDAD_MOVIMIENTO_PERSONAJE;
 			animationIndexPlayer = 2;
 		}
 
 		//Rotar al personaje Stick Derecho
 		if (abs(axes[2]) >= 0.3f   || abs(axes[3]) >= 0.3){
-			/*jugadorGameObject->ModelMatrix = glm::rotate(jugadorGameObject->ModelMatrix, glm::radians(axes[2] * VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
-			animationIndex = 0;
-			animationIndexPlayer = 2;
+		
+			//Obtenemos la posición del jugador y del stick
+			glm::vec3 playerCenter = glm::vec3(jugadorGameObject->ModelMatrix[3][0], jugadorGameObject->ModelMatrix[3][1], jugadorGameObject->ModelMatrix[3][2]);
+			glm::vec3 stickPosRelToPlayer = glm::vec3(playerCenter.x + axes[2], playerCenter.y, playerCenter.z + axes[3]);  //This is target position relative to player
+
+			//Obtenemos la dirección hacia el stick
+			glm::vec3 directionToStick = glm::normalize(stickPosRelToPlayer - playerCenter);
+			glm::vec3 currentDir = glm::normalize(jugadorGameObject->ModelMatrix[2]);
+
+			glm::mat4 currentTransform = jugadorGameObject->ModelMatrix; //Save current transform
 			
+			//Obtenemos el angulo entre la dirección actual y la dirección hacia el stick
+			float dotProduct = glm::dot(currentDir, directionToStick);
+			glm::vec3 crossProduct = glm::cross(directionToStick, currentDir);
+			float stickAngle = (acos(dotProduct));
 
-			jugadorGameObject->ModelMatrix = glm::rotate(jugadorGameObject->ModelMatrix, glm::radians(axes[0] * VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));*/
-
-			float stickAngle = glm::degrees( atan(axes[3] / axes[2]));
-			glm::mat4 currentTransform = jugadorGameObject->ModelMatrix;
-			glm::vec3 playerDir = jugadorGameObject->ModelMatrix[2];
-
-			
-			std::cout << "angulo del stick = " << stickAngle << std::endl;
-			std::cout << " Dir X = " << playerDir.x << " Dir Y = " << playerDir.y << " Dir Z = " << playerDir.z << std::endl;
-
-			glm::vec3 newDir = glm::normalize(glm::vec3(axes[2], 0, axes[3]));
-			glm::clamp(newDir, 0.0f, 1.0f);
-			jugadorGameObject->ModelMatrix[2][0] = newDir.x;
-			jugadorGameObject->ModelMatrix[2][1] = 0;
-			jugadorGameObject->ModelMatrix[2][2] = newDir.z;
-
-			//jugadorGameObject->ModelMatrix = glm::rotate(currentTransform, glm::radians(stickAngle), glm::vec3(0, 1, 0));
-			
-
-			
-
-	//		jugadorGameObject->ModelMatrix[2][0] += axes[2] * VELOCIDAD_MOVIMIENTO_PERSONAJE;
-//			jugadorGameObject->ModelMatrix[2][1] += axes[3] * VELOCIDAD_MOVIMIENTO_PERSONAJE;
-
-			animationIndex = 0;
-			animationIndexPlayer = 2;
+			//directionToStick != currentDir
+			if (stickAngle > 3.0f || stickAngle < 2.9f)
+			{
+				if(crossProduct.y < 0)
+					jugadorGameObject->ModelMatrix = glm::rotate(currentTransform, glm::radians(-VELOCIDAD_DE_GIRO_PERSONAJE), glm::vec3(0, 1, 0));
+				if(crossProduct.y > 0)
+					jugadorGameObject->ModelMatrix = glm::rotate(currentTransform, glm::radians(VELOCIDAD_DE_GIRO_PERSONAJE), glm::vec3(0, 1, 0));
+			}
+		
 		}
 
-		//Disparar balas, Boton A.
+		//Disparar balas, Boton RB.
 		//Detect Press
 		if(buttons[0] == GLFW_PRESS) {
 			btnApress = true;
 		}
 
 		//Wait for Release
-		if (btnApress && buttons[0] == GLFW_RELEASE) {
+		if (btnApress && buttons[5] == GLFW_RELEASE) {
 			generarBala();
 			btnApress = false;
 		}
@@ -879,14 +874,14 @@ bool processInput(bool continueApplication) {
 
 
 
-
+#if _DEBUG_CAMERA
 	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
 		camera->mouseMoveCamera(offsetX, 0.0, deltaTime);
 	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
 		camera->mouseMoveCamera(0.0, offsetY, deltaTime);	
 	offsetX = 0;
 	offsetY = 0;
-
+#endif
 	//Rotación del jugador
 	if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
 		jugadorGameObject->ModelMatrix = glm::rotate(jugadorGameObject->ModelMatrix, glm::radians(VELOCIDAD_ROTACION_PERSONAJE), glm::vec3(0, 1, 0));
@@ -916,15 +911,6 @@ bool processInput(bool continueApplication) {
 
 		generarBala();
 
-	}
-
-
-	bool stateSpace = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
-	if (!isJump && stateSpace)
-	{
-		isJump = true;
-		startTimeJump = currTime;
-		tmv = 0;
 	}
 
 	bool statePause;
