@@ -1258,7 +1258,7 @@ void applicationLoop() {
 					currTimeParticulasJugadorCamina = TimeManager::Instance().GetTime();//currTimeParticulasZombieBlood, lastTimeParticulasZombieBlood
 					if (currTimeParticulasJugadorCamina - lastTimeParticulasJugadorCamina > 1.5) {//Tiempo de la animacion
 						lastTimeParticulasJugadorCamina = currTimeParticulasJugadorCamina;
-						std::cout << "Aqui entra 1 " << std::endl;
+						//std::cout << "Aqui entra 1 " << std::endl;
 					}
 					glDepthMask(GL_FALSE);
 					glPointSize(10.0f);
