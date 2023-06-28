@@ -1614,13 +1614,18 @@ void applicationLoop() {
 				if (seconds % TIEMPO_ENTRE_ZOMBIES == 0) {
 					generarZombie();
 					TIEMPO_ENTRE_ZOMBIES += -1;
-					VELOCIDAD_MOVIMIENTO_ZOMBIE += 0.00019;
+					VELOCIDAD_MOVIMIENTO_ZOMBIE += 0.00001;
 					if (TIEMPO_ENTRE_ZOMBIES <= 0)
 					{
 						TIEMPO_ENTRE_ZOMBIES = 1;
 					}
 
 				}
+			}
+
+			if (enemyCollection.size() == 0)
+			{
+				generarZombie();
 			}
 
 
