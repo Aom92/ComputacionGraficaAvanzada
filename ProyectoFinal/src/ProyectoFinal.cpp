@@ -67,14 +67,14 @@
 #define GRAVEDAD_SALTO_PERSONAJE 0.5f
 #define NUMERO_ENEMIGOS 30
 #define VELOCIDAD_DE_GIRO_PERSONAJE 5.0f
-int TIEMPO_ENTRE_ZOMBIES = 10;
-int vidas = 1000;
+int TIEMPO_ENTRE_ZOMBIES = 5;
+int vidas = 250;
 float VELOCIDAD_MOVIMIENTO_ZOMBIE = 0.001f;
 
 // Constantes para la camara
 #define SCREEN_WIDTH 1350
 #define SCREEN_HEIGHT 768
-#define CAMERA_PITCH 35.0f
+#define CAMERA_PITCH 45.0f
 #define CAMERA_ANGLE 45.0f
 #define CAMERA_DISTANCE 15.0f
 
@@ -182,12 +182,12 @@ GL_TEXTURE_CUBE_MAP_NEGATIVE_Z };
 
 // SKYBOX
 std::string fileNames[6] = { 
-		"../Textures/mp_bloodvalley/blood-valley_ft.tga",	//FRONT
-		"../Textures/mp_bloodvalley/blood-valley_bk.tga",	//BACK
-		"../Textures/mp_bloodvalley/blood-valley_up.tga",	//UP
-		"../Textures/mp_bloodvalley/blood-valley_dn.tga",	//DOWN
-		"../Textures/mp_bloodvalley/blood-valley_rt.tga",	//RIGHT	
-		"../Textures/mp_bloodvalley/blood-valley_lf.tga" };	//LEFT
+		"../Textures/skybox/SB_FT.png",	//FRONT
+		"../Textures/skybox/SB_BK.png",	//BACK
+		"../Textures/skybox/SB_UP.png",	//UP
+		"../Textures/skybox/SB_DW.png",	//DOWN
+		"../Textures/skybox/SB_R.png",	//RIGHT	
+		"../Textures/skybox/SB_L.png" };	//LEFT
 
 // Random Number Generator
 std::random_device rd;
@@ -1015,7 +1015,7 @@ void applicationLoop() {
 	//Setting up Initial camera Angle and position.
 	camera->setAngleTarget(CAMERA_ANGLE);
 	camera->setDistanceFromTarget(CAMERA_DISTANCE);
-	camera->mouseMoveCamera(0.0, 45.0, 0.009);
+	camera->mouseMoveCamera(0.0, CAMERA_PITCH, 0.009);
 
 	glm::vec3 lightPos = glm::vec3(10.0, 10.0, 0.0);
 	shadowBox = new ShadowBox(-lightPos, camera.get(), 30.0f, 0.1f, 45.0f);
@@ -1062,7 +1062,6 @@ void applicationLoop() {
 				angleTarget = -angleTarget;
 
 			camera->setCameraTarget(target);
-			//camera->mouseMoveCamera(0.0, 15.0, deltaTime);
 			camera->updateCamera();
 			view = camera->getViewMatrix();
 
@@ -1605,8 +1604,8 @@ void applicationLoop() {
 			snprintf(buff, 100, "Tiempo: %d:%2d:%2d",hours,minutes,seconds);
 
 			//Cada 10 segundos incrementar la velocidad de los zombies.
-			if (seconds % 10 == 0) {
-				VELOCIDAD_MOVIMIENTO_ZOMBIE += 0.0001; //Incrementar levemente la velocidad de los zombies
+			if (seconds % 6 == 0) {
+				VELOCIDAD_MOVIMIENTO_ZOMBIE += 0.00019; //Incrementar levemente la velocidad de los zombies
 			}
 
 
@@ -1615,6 +1614,7 @@ void applicationLoop() {
 				if (seconds % TIEMPO_ENTRE_ZOMBIES == 0) {
 					generarZombie();
 					TIEMPO_ENTRE_ZOMBIES += -1;
+					VELOCIDAD_MOVIMIENTO_ZOMBIE += 0.00019;
 					if (TIEMPO_ENTRE_ZOMBIES <= 0)
 					{
 						TIEMPO_ENTRE_ZOMBIES = 1;
@@ -1778,7 +1778,7 @@ void generarBala() {
 	bulletGameObject->ModelMatrix = glm::mat4(jugadorGameObject->ModelMatrix);
 	bulletGameObject->ModelMatrix = glm::translate(bulletGameObject->ModelMatrix, glm::vec3(0, 1.8, 0.5));
 	bulletGameObject->ModelMatrix = glm::rotate(bulletGameObject->ModelMatrix, glm::radians(90.0f), glm::vec3(1, 0, 0));
-	bulletGameObject->ModelMatrix = glm::scale(bulletGameObject->ModelMatrix, glm::vec3(0.4f, 0.4, 0.4f));
+	bulletGameObject->ModelMatrix = glm::scale(bulletGameObject->ModelMatrix, glm::vec3(0.2f, 0.2, 0.2f));
 	GameObject* temp = new GameObject();
 	memcpy(temp, bulletGameObject, sizeof(GameObject));
 
@@ -2040,25 +2040,39 @@ void renderScene(bool renderParticles) {
 			glm::vec3 goal = (enemyCollection[i]->ModelMatrix[2]);
 			enemyCollection[i]->ModelMatrix = glm::translate(enemyCollection[i]->ModelMatrix, -currDirection * VELOCIDAD_MOVIMIENTO_ZOMBIE);
 			enemyCollection[i]->animationIndex = 1;
+
+
+			//Actualizar altura a la del terreno.
+
+			try
+			{
+				enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][2]);
+
+			}
+			catch (const std::exception&)
+			{
+				enemyCollection[i]->ModelMatrix[3][1] = 0;
+				continue;
+			}
+
+			
+
+			int seconds = (int)diffTime % 60;
+			//Revisar cada 4 segundos si la animacion de muerte termino para borrar al zombi
+			if (enemyCollection[i]->isDeath && enemyCollection[i]->animationIndex == 0)
+			{
+				if (seconds % 4 == 0)
+					enemyCollection.erase(enemyCollection.begin() + i);
+			}
+
+
+
+			enemyCollection[i]->Transform = glm::mat4(enemyCollection[i]->ModelMatrix);
+			enemyCollection[i]->SetScale(glm::vec3(0.00015, 0.00015, 0.00015));
+			enemyCollection[i]->Draw();
 		}
 
 
-		int seconds = (int)diffTime % 60;
-		//Revisar cada 4 segundos si la animacion de muerte termino para borrar al zombi
-		if (enemyCollection[i]->isDeath && enemyCollection[i]->animationIndex == 0)
-		{
-			if( seconds % 4 == 0)
-				enemyCollection.erase(enemyCollection.begin() + i);
-		}
-
-		//Actualizar altura a la del terreno.
-		enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][2]);
-		enemyCollection[i]->ModelMatrix[3][1] = terrain.getHeightTerrain(enemyCollection[i]->ModelMatrix[3][0], enemyCollection[i]->ModelMatrix[3][2]);
-
-		
-		enemyCollection[i]->Transform = glm::mat4(enemyCollection[i]->ModelMatrix);
-		enemyCollection[i]->SetScale(glm::vec3(0.00015, 0.00015, 0.00015));
-		enemyCollection[i]->Draw();
 	}
 
 	// LOGICA DE LA BALA.
